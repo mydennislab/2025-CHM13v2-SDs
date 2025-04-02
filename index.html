@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Structural Duplication Graph Browser</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/datatables.net-bs5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/vis-network/styles/vis-network.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding-top: 2rem;
+        }
+
+        .tag-input {
+            border: 1px solid #ccc;
+            padding: 0.5rem;
+            min-height: 3rem;
+            cursor: text;
+            background: #fff;
+        }
+
+        .tag {
+            background: #007bff;
+            color: #fff;
+            padding: 0.2rem 0.5rem;
+            margin: 0.2rem;
+            border-radius: 5px;
+            display: inline-block;
+        }
+
+        .tag-remove {
+            margin-left: 5px;
+            cursor: pointer;
+        }
+
+        .autocomplete-suggestions {
+            background: white;
+            border: 1px solid #ccc;
+            max-height: 200px;
+            overflow-y: auto;
+            position: absolute;
+            z-index: 1000;
+            width: 100%;
+        }
+
+        .autocomplete-suggestion {
+            padding: 0.5rem;
+            cursor: pointer;
+        }
+
+        .autocomplete-suggestion:hover {
+            background: #f0f0f0;
+        }
+
+        #graphContainer {
+            height: 500px;
+            border: 1px solid #ccc;
+            margin-top: 2rem;
+            margin-bottom: 2rem;
+            display: none;
+        }
+
+        footer {
+            border-top: 1px solid #ccc;
+            padding: 1rem 0;
+            text-align: center;
+            font-size: 0.9rem;
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+
+<body class="container-fluid">
+    <h1 class="mb-4 text-center">🧬 CHM13 Segmental Duplication viewer</h1>
+
+    <!-- Multi-gene Input -->
+    <div class="mb-3">
+        <label class="form-label">Search genes (comma-separated, case-insensitive):</label>
+        <div id="geneTags" class="tag-input" contenteditable="true"></div>
+        <div id="suggestions" class="autocomplete-suggestions"></div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">🔍 Filters</h5>
+            <div class="row g-3">
+                <div class="col-md-2 form-check">
+                    <input class="form-check-input" type="checkbox" id="filterTelomeric">
+                    <label class="form-check-label" for="filterTelomeric">No telomeric</label>
+                </div>
+                <div class="col-md-2 form-check">
+                    <input class="form-check-input" type="checkbox" id="filterPericentromeric">
+                    <label class="form-check-label" for="filterPericentromeric">No pericentromeric</label>
+                </div>
+                <div class="col-md-2 form-check">
+                    <input class="form-check-input" type="checkbox" id="filterAcrocentric">
+                    <label class="form-check-label" for="filterAcrocentric">No acrocentric</label>
+                </div>
+                <div class="col-md-2">
+                    <label for="minEdges" class="form-label">Min edges:</label>
+                    <input type="number" class="form-control" id="minEdges" placeholder="0">
+                </div>
+                <div class="col-md-2">
+                    <label for="maxCCSize" class="form-label">Max CC size:</label>
+                    <input type="number" class="form-control" id="maxCCSize" placeholder="e.g. 100">
+                </div>
+                <div class="col-md-2">
+                    <label for="geneBiotype" class="form-label">Gene biotype:</label>
+                    <select id="geneBiotype" class="form-select">
+                        <option value="">Any</option>
+                    </select>
+                </div>
+                <div class="col-md-2 mt-3">
+                    <button id="applyFilters" class="btn btn-secondary w-100 mt-2">Apply Filters</button>
+                </div>
+                <div class="col-md-2 mt-3">
+                    <button id="visualizeGraph" class="btn btn-warning w-100 mt-2">🕸 Visualize Graph</button>
+                </div>
+                <div class="col-md-2 mt-3">
+                    <button id="downloadZip" class="btn btn-success w-100 mt-2">⬇️ Download ZIP</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div id="statsBox" class="mb-4 alert alert-info d-none"></div>
+
+    <!-- Tables -->
+    <h3>📍 Filtered Nodes</h3>
+    <div class="table-responsive">
+        <table id="nodesTable" class="table table-striped" style="width:100%"></table>
+    </div>
+
+    <h3 class="mt-5">🔗 Filtered Edges</h3>
+    <div class="table-responsive">
+        <table id="edgesTable" class="table table-striped" style="width:100%"></table>
+    </div>
+
+    <!-- Graph -->
+    <div id="graphContainer"></div>
+
+    <!-- Footer -->
+    <footer>
+        Developed by <a href="https://github.com/mr-eyes/" target="_blank">Mohamed Abuelanin</a> in <a
+            href="https://www.dennislab.org/" target="_blank">Megan Dennis lab</a>
+    </footer>
+
+    <!-- JS Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/datatables.net/js/dataTables.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/datatables.net-bs5/js/dataTables.bootstrap5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+    <!-- App Logic -->
+    <script>
+        let nodesData = [], edgesData = [], geneList = [], selectedGenes = [];
+
+        function loadTSV(file, callback) {
+            fetch(file).then(r => r.text()).then(t => {
+                const [h, ...lines] = t.trim().split("\n");
+                const keys = h.split("\t");
+                const data = lines.map(line => {
+                    const obj = {};
+                    line.split("\t").forEach((val, i) => obj[keys[i]] = val);
+                    return obj;
+                });
+                callback(data, keys);
+            });
+        }
+
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str
+                .replace(/\\/g, '\\\\')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function updateGeneTags() {
+            const box = document.getElementById("geneTags");
+            box.innerHTML = "";
+            selectedGenes.forEach(g => {
+                const span = document.createElement("span");
+                span.className = "tag";
+                span.innerHTML = escapeHTML(g);
+                const remove = document.createElement("span");
+                remove.className = "tag-remove";
+                remove.innerHTML = "&times;";
+                remove.onclick = () => {
+                    selectedGenes = selectedGenes.filter(x => x !== g);
+                    updateGeneTags();
+                };
+                span.appendChild(remove);
+                box.appendChild(span);
+            });
+            box.appendChild(document.createElement("br"));
+        }
+
+        function autocomplete(input) {
+            const match = input.toLowerCase();
+            const hits = geneList.filter(g => g.toLowerCase().includes(match)).slice(0, 10);
+            const box = document.getElementById("suggestions");
+            box.innerHTML = hits.map(g => `<div class="autocomplete-suggestion">${g}</div>`).join('');
+            document.querySelectorAll('.autocomplete-suggestion').forEach(el => {
+                el.onclick = () => {
+                    const gene = el.textContent.trim();
+                    if (!selectedGenes.includes(gene)) selectedGenes.push(gene);
+                    updateGeneTags();
+                    box.innerHTML = '';
+                };
+            });
+        }
+
+        function getSelectedGenesFromBox() {
+            const raw = document.getElementById("geneTags").innerText;
+            const genes = raw
+                .split(",")
+                .map(g => g.trim().replace(/^['"]|['"]$/g, ''))
+                .filter(Boolean);
+            selectedGenes = [...new Set([...selectedGenes, ...genes])];
+            updateGeneTags();
+        }
+
+        function applyFilters() {
+            getSelectedGenesFromBox();
+            const fTelo = document.getElementById("filterTelomeric").checked;
+            const fPeri = document.getElementById("filterPericentromeric").checked;
+            const fAcro = document.getElementById("filterAcrocentric").checked;
+            const maxCC = parseInt(document.getElementById("maxCCSize").value || "0");
+            const minEdges = parseInt(document.getElementById("minEdges").value || "0");
+            const biotype = document.getElementById("geneBiotype").value;
+
+            let base = nodesData;
+            if (selectedGenes.length) {
+                const matched = nodesData.filter(n => selectedGenes.includes(n.gene_name));
+                const ids = new Set(matched.map(n => n.id));
+                edgesData.forEach(e => { if (ids.has(e.source) || ids.has(e.target)) { ids.add(e.source); ids.add(e.target); } });
+                base = nodesData.filter(n => ids.has(n.id));
+            }
+
+            const filteredNodes = base.filter(n => {
+                if (fTelo && n.telomeric === "True") return false;
+                if (fPeri && n.pericentromeric === "True") return false;
+                if (fAcro && n.acrocentric === "True") return false;
+                if (maxCC && parseInt(n.cc_size) > maxCC) return false;
+                if (minEdges && parseInt(n.num_edges) < minEdges) return false;
+                if (biotype && n.gene_biotype !== biotype) return false;
+                return true;
+            });
+
+            const ids = new Set(filteredNodes.map(n => n.id));
+            const filteredEdges = edgesData.filter(e => ids.has(e.source) && ids.has(e.target));
+
+            $('#nodesTable').DataTable().clear().rows.add(filteredNodes).draw();
+            $('#edgesTable').DataTable().clear().rows.add(filteredEdges).draw();
+
+            document.getElementById("statsBox").classList.remove("d-none");
+            document.getElementById("statsBox").innerHTML = `${filteredNodes.length} nodes, ${filteredEdges.length} edges, ${new Set(filteredNodes.map(n => n.component_id)).size} component(s).`;
+
+            return { filteredNodes, filteredEdges };
+        }
+
+        function populateBiotypes() {
+            const biotypes = [...new Set(nodesData.map(n => n.gene_biotype).filter(b => b && b !== "unknown"))];
+            const sel = document.getElementById("geneBiotype");
+            biotypes.sort().forEach(bt => {
+                const opt = document.createElement("option");
+                opt.value = bt;
+                opt.textContent = bt;
+                sel.appendChild(opt);
+            });
+        }
+
+        function showGraph(nodes, edges) {
+            const container = document.getElementById("graphContainer");
+            container.style.display = "block";
+            const graph = {
+                nodes: nodes.map(n => {
+                    const label = n.gene_name && n.gene_name !== "unknown"
+                        ? `${n.gene_name} (${n.id})`
+                        : n.id;
+                    return {
+                        id: n.id,
+                        label: label,
+                        title: `Gene: ${n.gene_name}\nID: ${n.id}`
+                    };
+                }),
+                edges: edges.map(e => ({ from: e.source, to: e.target }))
+            };
+            new vis.Network(container, graph, { physics: { stabilization: true } });
+        }
+
+        function downloadZip(nodes, edges) {
+            const zip = new JSZip();
+            const toTSV = (arr) => {
+                const keys = Object.keys(arr[0] || {});
+                return [keys.join("\t")].concat(arr.map(obj => keys.map(k => obj[k]).join("\t"))).join("\n");
+            };
+            const bed = nodes.map(n => {
+                const [chr, rng] = n.id.split(":");
+                const [s, e] = rng.split("-");
+                return `${chr}\t${s}\t${e}`;
+            }).join("\n");
+            zip.file("filtered_nodes.tsv", toTSV(nodes));
+            zip.file("filtered_edges.tsv", toTSV(edges));
+            zip.file("filtered_nodes.bed", bed);
+            zip.generateAsync({ type: "blob" }).then(file => {
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(file);
+                a.download = "filtered_data.zip";
+                a.click();
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            loadTSV("nodes_metadata.tsv", (data, cols) => {
+                nodesData = data;
+                geneList = [...new Set(data.map(d => d.gene_name).filter(g => g !== "unknown"))];
+                $('#nodesTable').DataTable({ data: [], columns: cols.map(c => ({ title: c, data: c })) });
+                populateBiotypes();
+            });
+            loadTSV("edges.tsv", (data, cols) => {
+                edgesData = data;
+                $('#edgesTable').DataTable({ data: [], columns: cols.map(c => ({ title: c, data: c })) });
+            });
+
+            document.getElementById("geneTags").addEventListener("input", e => {
+                const inputText = e.target.innerText || '';
+                const latest = inputText.split(",").pop().trim();
+                if (latest && latest.length >= 2) {
+                    autocomplete(latest);
+                } else {
+                    document.getElementById("suggestions").innerHTML = '';
+                }
+            });
+
+            document.getElementById("applyFilters").onclick = () => {
+                applyFilters();
+                document.getElementById("graphContainer").style.display = "none";
+            };
+
+            document.getElementById("visualizeGraph").onclick = () => {
+                const { filteredNodes, filteredEdges } = applyFilters();
+                showGraph(filteredNodes, filteredEdges);
+            };
+
+            document.getElementById("downloadZip").onclick = () => {
+                const { filteredNodes, filteredEdges } = applyFilters();
+                downloadZip(filteredNodes, filteredEdges);
+            };
+        });
+    </script>
+</body>
+
+</html>
