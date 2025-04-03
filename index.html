@@ -5,22 +5,39 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CHM13v2.0 Segmental Duplications Dashboard</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- DataTables Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/datatables.net-bs5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <!-- vis-network CSS -->
     <link href="https://cdn.jsdelivr.net/npm/vis-network/styles/vis-network.min.css" rel="stylesheet">
-    <!-- LZString library for compression -->
+    <!-- LZString for compression -->
     <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
     <style>
-        /* Constrain and center content */
-        .main-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 1rem;
+        /* Global styles */
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: #f4f7fa;
+            overflow-x: hidden;
         }
 
-        body {
-            margin: 0;
-            padding-top: 2rem;
+        header {
+            background: linear-gradient(135deg, #007bff, #00c6ff);
+            color: #fff;
+            padding: 2rem 1rem;
+            text-align: center;
+        }
+
+        /* Main container card */
+        .main-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            padding: 2rem;
         }
 
         .tag-input {
@@ -29,6 +46,7 @@
             min-height: 3rem;
             cursor: text;
             background: #fff;
+            border-radius: 4px;
         }
 
         .tag {
@@ -46,13 +64,14 @@
         }
 
         .autocomplete-suggestions {
-            background: white;
+            background: #fff;
             border: 1px solid #ccc;
             max-height: 200px;
             overflow-y: auto;
             position: absolute;
             z-index: 1000;
             width: 100%;
+            border-radius: 4px;
         }
 
         .autocomplete-suggestion {
@@ -67,39 +86,51 @@
         #graphContainer {
             height: 500px;
             border: 1px solid #ccc;
+            border-radius: 4px;
             margin-top: 1rem;
             margin-bottom: 1rem;
             display: none;
         }
 
         footer {
-            border-top: 1px solid #ccc;
-            padding: 1rem 0;
             text-align: center;
+            padding: 1rem;
+            border-top: 1px solid #ccc;
             font-size: 0.9rem;
-            margin-top: 1rem;
+            color: #666;
+            margin-top: 2rem;
+        }
+
+        .card {
+            border: none;
+            margin-bottom: 1rem;
         }
 
         .card-body {
-            padding: 1rem;
+            padding: 1rem 1.5rem;
         }
     </style>
 </head>
 
 <body>
-    <div class="main-container">
-        <h1 class="text-center mb-3">CHM13v2.0 Segmental Duplications Dashboard</h1>
+    <!-- Header Section -->
+    <header>
+        <h1>CHM13v2.0 Segmental Duplications Dashboard</h1>
+        <p class="lead">Explore, filter segmental duplications.</p>
+    </header>
 
-        <!-- Gene Input and Example Genes Button -->
-        <div class="mb-3">
+    <!-- Main Content Container -->
+    <div class="main-container">
+        <!-- Gene Input Section -->
+        <div class="mb-4">
             <label class="form-label">Search genes (comma-separated, case-insensitive):</label>
             <div id="geneTags" class="tag-input" contenteditable="true"></div>
             <div id="suggestions" class="autocomplete-suggestions"></div>
             <button type="button" id="loadExample" class="btn btn-info btn-sm mt-2">Load Example Genes</button>
         </div>
 
-        <!-- Dynamic Filters -->
-        <div class="card mb-3">
+        <!-- Dynamic Filters Section -->
+        <div class="card mb-4">
             <div class="card-body">
                 <h6 class="fw-bold">Dynamic Filters</h6>
                 <div id="dynamicFiltersContainer"></div>
@@ -108,7 +139,7 @@
         </div>
 
         <!-- Action Buttons -->
-        <div class="row mt-3 g-2">
+        <div class="row mb-4 g-2">
             <div class="col-auto">
                 <button type="button" id="applyFilters" class="btn btn-secondary">Apply Filters</button>
             </div>
@@ -123,28 +154,51 @@
             </div>
         </div>
 
+        <!-- File Downloads Section -->
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="mb-2">
+                    <label for="filePrefix" class="form-label">File Prefix (optional):</label>
+                    <input type="text" class="form-control form-control-sm" id="filePrefix"
+                        placeholder="e.g. myResults_">
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" id="downloadNodesTsv" class="btn btn-outline-primary btn-sm">Download Nodes
+                        TSV</button>
+                    <button type="button" id="downloadEdgesTsv" class="btn btn-outline-primary btn-sm">Download Edges
+                        TSV</button>
+                    <button type="button" id="downloadNodesBed" class="btn btn-outline-primary btn-sm">Download Nodes
+                        BED</button>
+                    <button type="button" id="downloadFullEdgesTsv" class="btn btn-outline-primary btn-sm">Download Full
+                        Component Edges TSV</button>
+                    <button type="button" id="downloadFullNodesBed" class="btn btn-outline-primary btn-sm">Download Full
+                        Component Nodes BED</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Stats -->
-        <div id="statsBox" class="alert alert-info d-none mt-3 mb-3" style="padding: 0.5rem;"></div>
+        <div id="statsBox" class="alert alert-info d-none mb-4" style="padding: 0.5rem;"></div>
 
         <!-- Data Tables -->
-        <h6 class="mt-3">📍 Filtered Nodes</h6>
-        <div class="table-responsive">
+        <h6 class="mb-2">📍 Filtered Nodes</h6>
+        <div class="table-responsive mb-4">
             <table id="nodesTable" class="table table-striped table-sm" style="width:100%"></table>
         </div>
-        <h6 class="mt-3">🔗 Filtered Edges</h6>
-        <div class="table-responsive">
+        <h6 class="mb-2">🔗 Filtered Edges</h6>
+        <div class="table-responsive mb-4">
             <table id="edgesTable" class="table table-striped table-sm" style="width:100%"></table>
         </div>
 
         <!-- Graph Container -->
         <div id="graphContainer"></div>
-
-        <!-- Footer -->
-        <footer>
-            Developed by <a href="https://github.com/mr-eyes/" target="_blank">Mohamed Abuelanin</a> in <a
-                href="https://www.dennislab.org/" target="_blank">Megan Dennis lab</a>
-        </footer>
     </div>
+
+    <!-- Footer -->
+    <footer>
+        Developed by <a href="https://github.com/mr-eyes/" target="_blank">Mohamed Abuelanin</a> in <a
+            href="https://www.dennislab.org/" target="_blank">Megan Dennis lab</a>
+    </footer>
 
     <!-- JS Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
@@ -162,7 +216,31 @@
             nodesColumns = [],
             nodesColumnTypes = {};
 
-        // Load TSV files
+        // Helper: Download file
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = filename;
+            a.click();
+        }
+
+        // Convert array to TSV string.
+        function toTSV(arr) {
+            const keys = Object.keys(arr[0] || {});
+            return [keys.join("\t")].concat(arr.map(obj => keys.map(k => obj[k]).join("\t"))).join("\n");
+        }
+
+        // Convert nodes to BED format.
+        function toBED(nodes) {
+            return nodes.map(n => {
+                const [chr, rng] = n.id.split(":");
+                const [s, e] = rng.split("-");
+                return `${chr}\t${s}\t${e}`;
+            }).join("\n");
+        }
+
+        // Load TSV files.
         function loadTSV(file, callback) {
             fetch(file).then(r => r.text()).then(t => {
                 const [h, ...lines] = t.trim().split("\n");
@@ -183,7 +261,7 @@
                 .replace(/'/g, '&#39;');
         }
 
-        // Update gene tags (using data attributes to avoid extra characters)
+        // Manage gene tags.
         function updateGeneTags() {
             const box = document.getElementById("geneTags");
             box.innerHTML = "";
@@ -205,7 +283,7 @@
             });
         }
 
-        // Autocomplete for gene names
+        // Autocomplete for gene names.
         function autocomplete(input) {
             const match = input.toLowerCase();
             const hits = geneList.filter(g => g.toLowerCase().includes(match) && g.length >= input.length).slice(0, 10);
@@ -221,37 +299,37 @@
             });
         }
 
-        // Retrieve gene selections from the data attributes
+        // Retrieve gene selections.
         function getSelectedGenesFromBox() {
             const spans = document.querySelectorAll("#geneTags span.tag");
             selectedGenes = Array.from(spans).map(span => span.getAttribute("data-gene"));
         }
 
-        // Load example genes
+        // Load example genes.
         document.getElementById("loadExample").addEventListener("click", () => {
             const exampleGenes = ["ARHGAP11A", "CD8B", "DUSP22", "FAM72A", "GPR89A", "HYDIN", "PDZK1", "ROCK1", "SRGAP2"];
             selectedGenes = exampleGenes;
             updateGeneTags();
         });
 
-        // Dynamic Filter Module
+        // Dynamic Filter Module.
         function addDynamicFilterRow() {
             const container = document.getElementById("dynamicFiltersContainer");
             const row = document.createElement("div");
             row.className = "row dynamic-filter-row mb-2 align-items-center";
             row.innerHTML = `
-      <div class="col-4 col-sm-4 col-md-5">
-        <select class="form-select form-select-sm filter-column">
-          <option value="" disabled selected>Select column</option>
-        </select>
-      </div>
-      <div class="col-6 col-sm-6 col-md-5 filter-input-container">
-        <!-- Dynamic input will appear here -->
-      </div>
-      <div class="col-2 col-sm-2 col-md-2 text-end">
-        <button type="button" class="btn btn-danger btn-sm remove-filter">X</button>
-      </div>
-    `;
+        <div class="col-4 col-sm-4 col-md-5">
+          <select class="form-select form-select-sm filter-column">
+            <option value="" disabled selected>Select column</option>
+          </select>
+        </div>
+        <div class="col-6 col-sm-6 col-md-5 filter-input-container">
+          <!-- Dynamic input will appear here -->
+        </div>
+        <div class="col-2 col-sm-2 col-md-2 text-end">
+          <button type="button" class="btn btn-danger btn-sm remove-filter">X</button>
+        </div>
+      `;
             const select = row.querySelector(".filter-column");
             select.innerHTML += nodesColumns.map(col => `<option value="${escapeHTML(col)}">${escapeHTML(col)}</option>`).join('');
             select.addEventListener("change", function () {
@@ -270,38 +348,38 @@
                 const isBoolean = uniqueValues.length === 2 && uniqueValues.includes("0") && uniqueValues.includes("1");
                 if (isBoolean) {
                     container.innerHTML = `
-          <select class="form-select form-select-sm filter-boolean">
-            <option value="" selected>Select</option>
-            <option value="1">True</option>
-            <option value="0">False</option>
-          </select>
-        `;
+            <select class="form-select form-select-sm filter-boolean">
+              <option value="" selected>Select</option>
+              <option value="1">True</option>
+              <option value="0">False</option>
+            </select>
+          `;
                 } else {
                     container.innerHTML = `
-          <div class="input-group input-group-sm">
-            <span class="input-group-text">Min</span>
-            <input type="number" class="form-control filter-min" placeholder="Min">
-            <span class="input-group-text">Max</span>
-            <input type="number" class="form-control filter-max" placeholder="Max">
-          </div>
-        `;
+            <div class="input-group input-group-sm">
+              <span class="input-group-text">Min</span>
+              <input type="number" class="form-control filter-min" placeholder="Min">
+              <span class="input-group-text">Max</span>
+              <input type="number" class="form-control filter-max" placeholder="Max">
+            </div>
+          `;
                 }
             } else {
                 const uniqueValues = [...new Set(nodesData.map(n => n[column]))].sort();
                 const optionsHTML = uniqueValues.map(v => `<option value="${escapeHTML(v)}">${escapeHTML(v)}</option>`).join('');
                 container.innerHTML = `
-        <select multiple class="form-select form-select-sm filter-values" size="3">
-          ${optionsHTML}
-        </select>
-        <div class="form-check mt-1">
-          <input class="form-check-input filter-exclude" type="checkbox" id="exclude-${column}">
-          <label class="form-check-label" for="exclude-${column}" style="font-size: 0.85rem;">Exclude</label>
-        </div>
-      `;
+          <select multiple class="form-select form-select-sm filter-values" size="3">
+            ${optionsHTML}
+          </select>
+          <div class="form-check mt-1">
+            <input class="form-check-input filter-exclude" type="checkbox" id="exclude-${column}">
+            <label class="form-check-label" for="exclude-${column}" style="font-size: 0.85rem;">Exclude</label>
+          </div>
+        `;
             }
         }
 
-        // Build the share state from current gene selection and dynamic filters.
+        // Build share state from gene selection and dynamic filters.
         function getShareState() {
             const state = {};
             state.genes = selectedGenes;
@@ -329,7 +407,7 @@
             return state;
         }
 
-        // Update URL with share state using LZString compression and copy it to the clipboard.
+        // Update URL with compressed share state and copy to clipboard.
         function shareResults() {
             const state = getShareState();
             const stateStr = LZString.compressToEncodedURIComponent(JSON.stringify(state));
@@ -339,12 +417,10 @@
                 const shareBtn = document.getElementById("shareResults");
                 shareBtn.textContent = "Link Copied!";
                 setTimeout(() => { shareBtn.textContent = "Share Results"; }, 2000);
-            }).catch(err => {
-                console.error("Could not copy link: ", err);
-            });
+            }).catch(err => { console.error("Could not copy link: ", err); });
         }
 
-        // Restore share state from the URL, if present.
+        // Restore share state from URL if present.
         function loadShareState() {
             const params = new URLSearchParams(window.location.search);
             if (params.has("shareState")) {
@@ -361,16 +437,16 @@
                             const row = document.createElement("div");
                             row.className = "row dynamic-filter-row mb-2 align-items-center";
                             row.innerHTML = `
-              <div class="col-4 col-sm-4 col-md-5">
-                <select class="form-select form-select-sm filter-column">
-                  <option value="" disabled>Select column</option>
-                </select>
-              </div>
-              <div class="col-6 col-sm-6 col-md-5 filter-input-container"></div>
-              <div class="col-2 col-sm-2 col-md-2 text-end">
-                <button type="button" class="btn btn-danger btn-sm remove-filter">X</button>
-              </div>
-            `;
+                <div class="col-4 col-sm-4 col-md-5">
+                  <select class="form-select form-select-sm filter-column">
+                    <option value="" disabled>Select column</option>
+                  </select>
+                </div>
+                <div class="col-6 col-sm-6 col-md-5 filter-input-container"></div>
+                <div class="col-2 col-sm-2 col-md-2 text-end">
+                  <button type="button" class="btn btn-danger btn-sm remove-filter">X</button>
+                </div>
+              `;
                             const select = row.querySelector(".filter-column");
                             select.innerHTML += nodesColumns.map(col => `<option value="${escapeHTML(col)}">${escapeHTML(col)}</option>`).join('');
                             select.value = filter.column;
@@ -404,7 +480,7 @@
             }
         }
 
-        // Apply dynamic filters and update the DataTables.
+        // Apply dynamic filters and update DataTables.
         function applyFilters() {
             getSelectedGenesFromBox();
             let base = nodesData;
@@ -421,7 +497,7 @@
                 });
                 base = nodesData.filter(n => ids.has(n.id));
             }
-            let filteredNodes = base; // No static filters
+            let filteredNodes = base; // No static filters.
 
             // Apply dynamic filters.
             const dynamicFilters = document.querySelectorAll(".dynamic-filter-row");
@@ -486,22 +562,11 @@
 
         function downloadZip(nodes, edges) {
             const zip = new JSZip();
-            const toTSV = (arr) => {
-                const keys = Object.keys(arr[0] || {});
-                return [keys.join("\t")].concat(arr.map(obj => keys.map(k => obj[k]).join("\t"))).join("\n");
-            };
-
-            const bed = nodes.map(n => {
-                const [chr, rng] = n.id.split(":");
-                const [s, e] = rng.split("-");
-                return `${chr}\t${s}\t${e}`;
-            }).join("\n");
-
             zip.file("filtered_nodes.tsv", toTSV(nodes));
             zip.file("filtered_edges.tsv", toTSV(edges));
-            zip.file("filtered_nodes.bed", bed);
+            zip.file("filtered_nodes.bed", toBED(nodes));
 
-            // Compute full connected components.
+            // Compute full component files.
             const adj = {};
             nodesData.forEach(n => { adj[n.id] = []; });
             edgesData.forEach(e => {
@@ -522,23 +587,105 @@
             filteredIds.forEach(id => { if (!visited.has(id)) dfs(id); });
             const fullComponentNodes = nodesData.filter(n => fullComponentIds.has(n.id));
             const fullComponentEdges = edgesData.filter(e => fullComponentIds.has(e.source) && fullComponentIds.has(e.target));
-            const fullComponentBed = fullComponentNodes.map(n => {
-                const [chr, rng] = n.id.split(":");
-                const [s, e] = rng.split("-");
-                return `${chr}\t${s}\t${e}`;
-            }).join("\n");
-
             zip.file("filtered_edges_full_component.tsv", toTSV(fullComponentEdges));
-            zip.file("filtered_nodes_full_component.bed", fullComponentBed);
+            zip.file("filtered_nodes_full_component.bed", toBED(fullComponentNodes));
 
             zip.generateAsync({ type: "blob" }).then(file => {
-                const a = document.createElement("a");
-                a.href = URL.createObjectURL(file);
-                a.download = "filtered_data.zip";
-                a.click();
+                downloadFile(file, "filtered_data.zip", "application/zip");
             });
         }
 
+        // Download individual files.
+        function downloadIndividualFile(filename, content) {
+            const prefix = document.getElementById("filePrefix").value || "";
+            downloadFile(content, prefix + filename, "text/plain");
+        }
+
+        document.getElementById("downloadNodesTsv").addEventListener("click", () => {
+            const { filteredNodes } = applyFilters();
+            downloadIndividualFile("filtered_nodes.tsv", toTSV(filteredNodes));
+        });
+        document.getElementById("downloadEdgesTsv").addEventListener("click", () => {
+            const { filteredEdges } = applyFilters();
+            downloadIndividualFile("filtered_edges.tsv", toTSV(filteredEdges));
+        });
+        document.getElementById("downloadNodesBed").addEventListener("click", () => {
+            const { filteredNodes } = applyFilters();
+            downloadIndividualFile("filtered_nodes.bed", toBED(filteredNodes));
+        });
+        document.getElementById("downloadFullEdgesTsv").addEventListener("click", () => {
+            const { filteredNodes } = applyFilters();
+            const adj = {};
+            nodesData.forEach(n => { adj[n.id] = []; });
+            edgesData.forEach(e => {
+                if (adj[e.source] && adj[e.target]) {
+                    adj[e.source].push(e.target);
+                    adj[e.target].push(e.source);
+                }
+            });
+            const filteredIds = new Set(filteredNodes.map(n => n.id));
+            const visited = new Set();
+            const fullComponentIds = new Set();
+            function dfs(nodeId) {
+                if (visited.has(nodeId)) return;
+                visited.add(nodeId);
+                fullComponentIds.add(nodeId);
+                (adj[nodeId] || []).forEach(neighbor => dfs(neighbor));
+            }
+            filteredIds.forEach(id => { if (!visited.has(id)) dfs(id); });
+            const fullComponentEdges = edgesData.filter(e => fullComponentIds.has(e.source) && fullComponentIds.has(e.target));
+            downloadIndividualFile("filtered_edges_full_component.tsv", toTSV(fullComponentEdges));
+        });
+        document.getElementById("downloadFullNodesBed").addEventListener("click", () => {
+            const { filteredNodes } = applyFilters();
+            const adj = {};
+            nodesData.forEach(n => { adj[n.id] = []; });
+            edgesData.forEach(e => {
+                if (adj[e.source] && adj[e.target]) {
+                    adj[e.source].push(e.target);
+                    adj[e.target].push(e.source);
+                }
+            });
+            const filteredIds = new Set(filteredNodes.map(n => n.id));
+            const visited = new Set();
+            const fullComponentIds = new Set();
+            function dfs(nodeId) {
+                if (visited.has(nodeId)) return;
+                visited.add(nodeId);
+                fullComponentIds.add(nodeId);
+                (adj[nodeId] || []).forEach(neighbor => dfs(neighbor));
+            }
+            filteredIds.forEach(id => { if (!visited.has(id)) dfs(id); });
+            const fullComponentNodes = nodesData.filter(n => fullComponentIds.has(n.id));
+            downloadIndividualFile("filtered_nodes_full_component.bed", toBED(fullComponentNodes));
+        });
+
+        document.getElementById("shareResults").onclick = shareResults;
+
+        // Event listeners for gene input and dynamic filters.
+        document.getElementById("geneTags").addEventListener("input", e => {
+            const inputText = e.target.innerText || '';
+            const latest = inputText.split(",").pop().trim();
+            if (latest && latest.length >= 2) {
+                autocomplete(latest);
+            } else {
+                document.getElementById("suggestions").innerHTML = '';
+            }
+        });
+
+        document.getElementById("addFilter").addEventListener("click", addDynamicFilterRow);
+
+        document.getElementById("applyFilters").onclick = () => {
+            applyFilters();
+            document.getElementById("graphContainer").style.display = "none";
+        };
+
+        document.getElementById("visualizeGraph").onclick = () => {
+            const { filteredNodes, filteredEdges } = applyFilters();
+            showGraph(filteredNodes, filteredEdges);
+        };
+
+        // Load TSV data and restore share state.
         document.addEventListener("DOMContentLoaded", () => {
             loadTSV("nodes_metadata.tsv", (data, cols) => {
                 nodesData = data;
@@ -549,42 +696,12 @@
                 });
                 geneList = [...new Set(data.map(d => d.gene_name).filter(g => g !== "unknown"))];
                 $('#nodesTable').DataTable({ data: [], columns: cols.map(c => ({ title: c, data: c })) });
-                // Removed populateBiotypes since static filters are gone.
                 loadShareState();
             });
             loadTSV("edges.tsv", (data, cols) => {
                 edgesData = data;
                 $('#edgesTable').DataTable({ data: [], columns: cols.map(c => ({ title: c, data: c })) });
             });
-
-            document.getElementById("geneTags").addEventListener("input", e => {
-                const inputText = e.target.innerText || '';
-                const latest = inputText.split(",").pop().trim();
-                if (latest && latest.length >= 2) {
-                    autocomplete(latest);
-                } else {
-                    document.getElementById("suggestions").innerHTML = '';
-                }
-            });
-
-            document.getElementById("addFilter").addEventListener("click", addDynamicFilterRow);
-
-            document.getElementById("applyFilters").onclick = () => {
-                applyFilters();
-                document.getElementById("graphContainer").style.display = "none";
-            };
-
-            document.getElementById("visualizeGraph").onclick = () => {
-                const { filteredNodes, filteredEdges } = applyFilters();
-                showGraph(filteredNodes, filteredEdges);
-            };
-
-            document.getElementById("downloadZip").onclick = () => {
-                const { filteredNodes, filteredEdges } = applyFilters();
-                downloadZip(filteredNodes, filteredEdges);
-            };
-
-            document.getElementById("shareResults").onclick = shareResults;
         });
     </script>
 </body>
