@@ -293,7 +293,7 @@
             let nodesColumns = [], edgesColumns = [], componentsColumns = [];
             let nodesColumnTypes = {}, edgesColumnTypes = {}, componentsColumnTypes = {};
 
-            // Updated toBED: now outputs 4 columns with the 4th as "{chr}:{start}-{end}-{gene_name}"
+            // Updated toBED: now outputs 4 columns with 4th column as "{chr}:{start}-{end}-{gene_name}"
             function toBED(nodes) {
                 return nodes.map(n => {
                     const [chr, rng] = n.id.split(":");
@@ -379,6 +379,25 @@
                     };
                 });
             }
+
+            // Add event listener for the contenteditable geneTags to handle Enter key.
+            const geneTagsBox = document.getElementById("geneTags");
+            geneTagsBox.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    let gene = this.innerText.trim();
+                    if (gene !== "" && !selectedGenes.includes(gene)) {
+                        selectedGenes.push(gene);
+                        updateGeneTags();
+                    }
+                    this.innerText = "";
+                }
+            });
+
+            // Listen for input events to trigger autocomplete.
+            geneTagsBox.addEventListener("input", function (e) {
+                autocomplete(this.innerText);
+            });
 
             // Retrieve gene selections from tags.
             function getSelectedGenesFromBox() {
