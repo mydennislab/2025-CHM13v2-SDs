@@ -40,20 +40,24 @@
             padding: 2rem;
         }
 
-        .tag-input {
+        /* Gene tags input: container holds tags and a dedicated text input */
+        #geneTagsContainer {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            align-items: center;
+            padding: 5px;
             border: 1px solid #ccc;
-            padding: 0.5rem;
-            min-height: 3rem;
-            cursor: text;
-            background: #fff;
             border-radius: 4px;
+            min-height: 3rem;
+            background: #fff;
         }
 
         .tag {
             background: #007bff;
             color: #fff;
             padding: 0.2rem 0.5rem;
-            margin: 0.2rem;
+            margin: 2px;
             border-radius: 5px;
             display: inline-block;
         }
@@ -61,6 +65,13 @@
         .tag-remove {
             margin-left: 5px;
             cursor: pointer;
+        }
+
+        #geneInput {
+            border: none;
+            outline: none;
+            flex: 1;
+            min-width: 150px;
         }
 
         .autocomplete-suggestions {
@@ -128,9 +139,12 @@
         <!-- Gene Input Section -->
         <div class="mb-4">
             <label class="form-label">Search genes (comma-separated, case-insensitive):</label>
-            <div id="geneTags" class="tag-input" contenteditable="true"></div>
+            <div id="geneTagsContainer">
+                <!-- Existing gene tags will be added here -->
+                <input type="text" id="geneInput" placeholder="Type gene name and press Enter">
+            </div>
             <div id="suggestions" class="autocomplete-suggestions"></div>
-            <button type="button" id="loadExample" class="btn btn-info btn-sm mt-2">Load Example: HSD Genes</button>
+            <button type="button" id="loadExample" class="btn btn-info btn-sm mt-2">Load Example Genes</button>
         </div>
 
         <!-- Dynamic Filters Accordion -->
@@ -342,10 +356,13 @@
                     .replace(/'/g, '&#39;');
             }
 
-            // Manage gene tags.
+            // Gene Tags: Use a separate container for tags and an input for new gene names.
+            const geneTagsContainer = document.getElementById("geneTagsContainer");
+            const geneInput = document.getElementById("geneInput");
+
             function updateGeneTags() {
-                const box = document.getElementById("geneTags");
-                box.innerHTML = "";
+                // Clear container and rebuild tags, then append the input.
+                geneTagsContainer.innerHTML = "";
                 selectedGenes.forEach(g => {
                     const span = document.createElement("span");
                     span.className = "tag";
@@ -359,50 +376,51 @@
                         updateGeneTags();
                     };
                     span.appendChild(remove);
-                    box.appendChild(span);
-                    box.appendChild(document.createTextNode(" "));
+                    geneTagsContainer.appendChild(span);
                 });
+                geneTagsContainer.appendChild(geneInput);
+                geneInput.focus();
             }
 
-            // Autocomplete for gene names.
-            function autocomplete(input) {
-                const match = input.toLowerCase();
-                const hits = geneList.filter(g => g.toLowerCase().includes(match) && g.length >= input.length).slice(0, 10);
-                const box = document.getElementById("suggestions");
-                box.innerHTML = hits.map(g => `<div class="autocomplete-suggestion">${g}</div>`).join('');
-                document.querySelectorAll('.autocomplete-suggestion').forEach(el => {
-                    el.onclick = () => {
-                        const gene = el.textContent.trim();
-                        if (!selectedGenes.includes(gene)) selectedGenes.push(gene);
-                        updateGeneTags();
-                        box.innerHTML = '';
-                    };
-                });
-            }
-
-            // Add event listener for the contenteditable geneTags to handle Enter key.
-            const geneTagsBox = document.getElementById("geneTags");
-            geneTagsBox.addEventListener("keydown", function (e) {
+            geneInput.addEventListener("keydown", function (e) {
                 if (e.key === "Enter") {
                     e.preventDefault();
-                    let gene = this.innerText.trim();
-                    if (gene !== "" && !selectedGenes.includes(gene)) {
-                        selectedGenes.push(gene);
+                    let gene = this.value.trim();
+                    if (gene !== "") {
+                        if (!selectedGenes.includes(gene)) {
+                            selectedGenes.push(gene);
+                        }
                         updateGeneTags();
                     }
-                    this.innerText = "";
+                    this.value = "";
+                    document.getElementById("suggestions").innerHTML = "";
                 }
             });
 
-            // Listen for input events to trigger autocomplete.
-            geneTagsBox.addEventListener("input", function (e) {
-                autocomplete(this.innerText);
+            geneInput.addEventListener("input", function () {
+                if (this.value.trim() === "") {
+                    document.getElementById("suggestions").innerHTML = "";
+                } else {
+                    autocomplete(this.value);
+                }
             });
 
-            // Retrieve gene selections from tags.
-            function getSelectedGenesFromBox() {
-                const spans = document.querySelectorAll("#geneTags span.tag");
-                selectedGenes = Array.from(spans).map(span => span.getAttribute("data-gene"));
+            // Autocomplete for gene names.
+            function autocomplete(inputText) {
+                const match = inputText.toLowerCase();
+                const hits = geneList.filter(g => g.toLowerCase().includes(match) && g.length >= inputText.length).slice(0, 10);
+                const suggestionsBox = document.getElementById("suggestions");
+                suggestionsBox.innerHTML = hits.map(g => `<div class="autocomplete-suggestion">${g}</div>`).join('');
+                document.querySelectorAll('.autocomplete-suggestion').forEach(el => {
+                    el.onclick = () => {
+                        const gene = el.textContent.trim();
+                        if (!selectedGenes.includes(gene)) {
+                            selectedGenes.push(gene);
+                        }
+                        updateGeneTags();
+                        suggestionsBox.innerHTML = "";
+                    };
+                });
             }
 
             document.getElementById("loadExample").addEventListener("click", () => {
