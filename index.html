@@ -293,6 +293,17 @@
             let nodesColumns = [], edgesColumns = [], componentsColumns = [];
             let nodesColumnTypes = {}, edgesColumnTypes = {}, componentsColumnTypes = {};
 
+            // Updated toBED: now outputs 4 columns with the 4th as "{chr}:{start}-{end}-{gene_name}"
+            function toBED(nodes) {
+                return nodes.map(n => {
+                    const [chr, rng] = n.id.split(":");
+                    const [s, e] = rng.split("-");
+                    const gene = n.gene_name || "unknown";
+                    const name = `${chr}:${s}-${e}-${gene}`;
+                    return `${chr}\t${s}\t${e}\t${name}`;
+                }).join("\n");
+            }
+
             // Helper: Download file
             function downloadFile(content, filename, mimeType) {
                 const blob = new Blob([content], { type: mimeType });
@@ -307,15 +318,6 @@
                 if (arr.length === 0) return "";
                 const keys = Object.keys(arr[0]);
                 return [keys.join("\t")].concat(arr.map(obj => keys.map(k => obj[k]).join("\t"))).join("\n");
-            }
-
-            // Convert nodes to BED format.
-            function toBED(nodes) {
-                return nodes.map(n => {
-                    const [chr, rng] = n.id.split(":");
-                    const [s, e] = rng.split("-");
-                    return `${chr}\t${s}\t${e}`;
-                }).join("\n");
             }
 
             // Load TSV files.
@@ -869,7 +871,6 @@
                 finalComponents.forEach(comp => {
                     const compNodeIds = comp.node_ids.split(";");
                     const compNodes = finalNodes.filter(n => compNodeIds.includes(n.id));
-                    // Each component BED file is named using its component_id.
                     zip.file(`component_${comp.component_id}.bed`, toBED(compNodes));
                 });
                 zip.generateAsync({ type: "blob" }).then(file => {
