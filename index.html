@@ -109,6 +109,10 @@
         .card-body {
             padding: 1rem 1.5rem;
         }
+
+        .dynamic-filter-row {
+            margin-bottom: 0.5rem;
+        }
     </style>
 </head>
 
@@ -129,12 +133,55 @@
             <button type="button" id="loadExample" class="btn btn-info btn-sm mt-2">Load Example Genes</button>
         </div>
 
-        <!-- Dynamic Filters Section -->
-        <div class="card mb-4">
-            <div class="card-body">
-                <h6 class="fw-bold">Dynamic Filters</h6>
-                <div id="dynamicFiltersContainer"></div>
-                <button type="button" id="addFilter" class="btn btn-primary btn-sm mt-2">Add Filter</button>
+        <!-- Dynamic Filters Accordion -->
+        <div class="accordion mb-4" id="filterAccordion">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingNodes">
+                    <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseNodes" aria-expanded="true" aria-controls="collapseNodes">
+                        Nodes Filters
+                    </button>
+                </h2>
+                <div id="collapseNodes" class="accordion-collapse collapse show" aria-labelledby="headingNodes"
+                    data-bs-parent="#filterAccordion">
+                    <div class="accordion-body">
+                        <div id="nodesFiltersContainer"></div>
+                        <button type="button" id="addNodeFilter" class="btn btn-primary btn-sm mt-2">Add Node
+                            Filter</button>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingEdges">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseEdges" aria-expanded="false" aria-controls="collapseEdges">
+                        Edges Filters
+                    </button>
+                </h2>
+                <div id="collapseEdges" class="accordion-collapse collapse" aria-labelledby="headingEdges"
+                    data-bs-parent="#filterAccordion">
+                    <div class="accordion-body">
+                        <div id="edgesFiltersContainer"></div>
+                        <button type="button" id="addEdgeFilter" class="btn btn-primary btn-sm mt-2">Add Edge
+                            Filter</button>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingComponents">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                        data-bs-target="#collapseComponents" aria-expanded="false" aria-controls="collapseComponents">
+                        Components Filters
+                    </button>
+                </h2>
+                <div id="collapseComponents" class="accordion-collapse collapse" aria-labelledby="headingComponents"
+                    data-bs-parent="#filterAccordion">
+                    <div class="accordion-body">
+                        <div id="componentsFiltersContainer"></div>
+                        <button type="button" id="addComponentFilter" class="btn btn-primary btn-sm mt-2">Add Component
+                            Filter</button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -185,13 +232,30 @@
         <div class="table-responsive mb-4">
             <table id="nodesTable" class="table table-striped table-sm" style="width:100%"></table>
         </div>
-        <h6 class="mb-2">🔗 Filtered Edges</h6>
+        <h6 class="mb-2">📊 Filtered Components</h6>
         <div class="table-responsive mb-4">
-            <table id="edgesTable" class="table table-striped table-sm" style="width:100%"></table>
+            <table id="componentsTable" class="table table-striped table-sm" style="width:100%"></table>
         </div>
 
         <!-- Graph Container -->
         <div id="graphContainer"></div>
+    </div>
+
+    <!-- Node Details Modal -->
+    <div class="modal fade" id="nodeDetailsModal" tabindex="-1" aria-labelledby="nodeDetailsModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="nodeDetailsModalLabel">Node Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="nodeDetailsContent"></div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Footer -->
@@ -204,489 +268,583 @@
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/datatables.net/js/dataTables.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/datatables.net-bs5/js/dataTables.bootstrap5.min.js"></script>
+    <!-- Bootstrap Bundle for Modal -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vis-network/standalone/umd/vis-network.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
     <!-- App Logic -->
     <script>
-        let nodesData = [],
-            edgesData = [],
-            geneList = [],
-            selectedGenes = [],
-            nodesColumns = [],
-            nodesColumnTypes = {};
+        document.addEventListener("DOMContentLoaded", () => {
+            // Global data arrays and column definitions.
+            let nodesData = [], edgesData = [], componentsData = [];
+            let geneList = [], selectedGenes = [];
+            let nodesColumns = [], edgesColumns = [], componentsColumns = [];
+            let nodesColumnTypes = {}, edgesColumnTypes = {}, componentsColumnTypes = {};
 
-        // Helper: Download file
-        function downloadFile(content, filename, mimeType) {
-            const blob = new Blob([content], { type: mimeType });
-            const a = document.createElement("a");
-            a.href = URL.createObjectURL(blob);
-            a.download = filename;
-            a.click();
-        }
+            // Helper: Download file
+            function downloadFile(content, filename, mimeType) {
+                const blob = new Blob([content], { type: mimeType });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = filename;
+                a.click();
+            }
 
-        // Convert array to TSV string.
-        function toTSV(arr) {
-            const keys = Object.keys(arr[0] || {});
-            return [keys.join("\t")].concat(arr.map(obj => keys.map(k => obj[k]).join("\t"))).join("\n");
-        }
+            // Convert array of objects to TSV string.
+            function toTSV(arr) {
+                if (arr.length === 0) return "";
+                const keys = Object.keys(arr[0]);
+                return [keys.join("\t")].concat(arr.map(obj => keys.map(k => obj[k]).join("\t"))).join("\n");
+            }
 
-        // Convert nodes to BED format.
-        function toBED(nodes) {
-            return nodes.map(n => {
-                const [chr, rng] = n.id.split(":");
-                const [s, e] = rng.split("-");
-                return `${chr}\t${s}\t${e}`;
-            }).join("\n");
-        }
+            // Convert nodes to BED format.
+            function toBED(nodes) {
+                return nodes.map(n => {
+                    const [chr, rng] = n.id.split(":");
+                    const [s, e] = rng.split("-");
+                    return `${chr}\t${s}\t${e}`;
+                }).join("\n");
+            }
 
-        // Load TSV files.
-        function loadTSV(file, callback) {
-            fetch(file).then(r => r.text()).then(t => {
-                const [h, ...lines] = t.trim().split("\n");
-                const keys = h.split("\t");
-                const data = lines.map(line => {
-                    const obj = {};
-                    line.split("\t").forEach((val, i) => obj[keys[i]] = val);
-                    return obj;
+            // Load TSV files.
+            function loadTSV(file, callback) {
+                fetch(file).then(r => r.text()).then(t => {
+                    const [h, ...lines] = t.trim().split("\n");
+                    const keys = h.split("\t");
+                    const data = lines.map(line => {
+                        const obj = {};
+                        line.split("\t").forEach((val, i) => obj[keys[i]] = val);
+                        return obj;
+                    });
+                    callback(data, keys);
                 });
-                callback(data, keys);
+            }
+
+            // Escape HTML in strings.
+            function escapeHTML(str) {
+                if (!str) return '';
+                return str.replace(/\\/g, '\\\\')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            // Manage gene tags.
+            function updateGeneTags() {
+                const box = document.getElementById("geneTags");
+                box.innerHTML = "";
+                selectedGenes.forEach(g => {
+                    const span = document.createElement("span");
+                    span.className = "tag";
+                    span.textContent = g;
+                    span.setAttribute("data-gene", g);
+                    const remove = document.createElement("span");
+                    remove.className = "tag-remove";
+                    remove.innerHTML = "&times;";
+                    remove.onclick = () => {
+                        selectedGenes = selectedGenes.filter(x => x !== g);
+                        updateGeneTags();
+                    };
+                    span.appendChild(remove);
+                    box.appendChild(span);
+                    box.appendChild(document.createTextNode(" "));
+                });
+            }
+
+            // Autocomplete for gene names.
+            function autocomplete(input) {
+                const match = input.toLowerCase();
+                const hits = geneList.filter(g => g.toLowerCase().includes(match) && g.length >= input.length).slice(0, 10);
+                const box = document.getElementById("suggestions");
+                box.innerHTML = hits.map(g => `<div class="autocomplete-suggestion">${g}</div>`).join('');
+                document.querySelectorAll('.autocomplete-suggestion').forEach(el => {
+                    el.onclick = () => {
+                        const gene = el.textContent.trim();
+                        if (!selectedGenes.includes(gene)) selectedGenes.push(gene);
+                        updateGeneTags();
+                        box.innerHTML = '';
+                    };
+                });
+            }
+
+            // Retrieve gene selections from tags.
+            function getSelectedGenesFromBox() {
+                const spans = document.querySelectorAll("#geneTags span.tag");
+                selectedGenes = Array.from(spans).map(span => span.getAttribute("data-gene"));
+            }
+
+            document.getElementById("loadExample").addEventListener("click", () => {
+                const exampleGenes = ["ARHGAP11A", "CD8B", "DUSP22", "FAM72A", "GPR89A", "HYDIN", "PDZK1", "ROCK1", "SRGAP2"];
+                selectedGenes = exampleGenes;
+                updateGeneTags();
             });
-        }
 
-        function escapeHTML(str) {
-            if (!str) return '';
-            return str.replace(/\\/g, '\\\\')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
-
-        // Manage gene tags.
-        function updateGeneTags() {
-            const box = document.getElementById("geneTags");
-            box.innerHTML = "";
-            selectedGenes.forEach(g => {
-                const span = document.createElement("span");
-                span.className = "tag";
-                span.textContent = g;
-                span.setAttribute("data-gene", g);
-                const remove = document.createElement("span");
-                remove.className = "tag-remove";
-                remove.innerHTML = "&times;";
-                remove.onclick = () => {
-                    selectedGenes = selectedGenes.filter(x => x !== g);
-                    updateGeneTags();
-                };
-                span.appendChild(remove);
-                box.appendChild(span);
-                box.appendChild(document.createTextNode(" "));
-            });
-        }
-
-        // Autocomplete for gene names.
-        function autocomplete(input) {
-            const match = input.toLowerCase();
-            const hits = geneList.filter(g => g.toLowerCase().includes(match) && g.length >= input.length).slice(0, 10);
-            const box = document.getElementById("suggestions");
-            box.innerHTML = hits.map(g => `<div class="autocomplete-suggestion">${g}</div>`).join('');
-            document.querySelectorAll('.autocomplete-suggestion').forEach(el => {
-                el.onclick = () => {
-                    const gene = el.textContent.trim();
-                    if (!selectedGenes.includes(gene)) selectedGenes.push(gene);
-                    updateGeneTags();
-                    box.innerHTML = '';
-                };
-            });
-        }
-
-        // Retrieve gene selections.
-        function getSelectedGenesFromBox() {
-            const spans = document.querySelectorAll("#geneTags span.tag");
-            selectedGenes = Array.from(spans).map(span => span.getAttribute("data-gene"));
-        }
-
-        // Load example genes.
-        document.getElementById("loadExample").addEventListener("click", () => {
-            const exampleGenes = ["ARHGAP11A", "CD8B", "DUSP22", "FAM72A", "GPR89A", "HYDIN", "PDZK1", "ROCK1", "SRGAP2"];
-            selectedGenes = exampleGenes;
-            updateGeneTags();
-        });
-
-        // Dynamic Filter Module.
-        function addDynamicFilterRow() {
-            const container = document.getElementById("dynamicFiltersContainer");
-            const row = document.createElement("div");
-            row.className = "row dynamic-filter-row mb-2 align-items-center";
-            row.innerHTML = `
-        <div class="col-4 col-sm-4 col-md-5">
-          <select class="form-select form-select-sm filter-column">
-            <option value="" disabled selected>Select column</option>
-          </select>
-        </div>
-        <div class="col-6 col-sm-6 col-md-5 filter-input-container">
-          <!-- Dynamic input will appear here -->
-        </div>
-        <div class="col-2 col-sm-2 col-md-2 text-end">
-          <button type="button" class="btn btn-danger btn-sm remove-filter">X</button>
-        </div>
-      `;
-            const select = row.querySelector(".filter-column");
-            select.innerHTML += nodesColumns.map(col => `<option value="${escapeHTML(col)}">${escapeHTML(col)}</option>`).join('');
-            select.addEventListener("change", function () {
-                updateFilterInput(row, this.value);
-            });
-            row.querySelector(".remove-filter").addEventListener("click", () => row.remove());
-            container.appendChild(row);
-        }
-
-        // Update dynamic filter input based on column type.
-        function updateFilterInput(filterRow, column) {
-            const container = filterRow.querySelector(".filter-input-container");
-            const colType = nodesColumnTypes[column];
-            if (colType === "number") {
-                const uniqueValues = [...new Set(nodesData.map(n => n[column]))];
-                const isBoolean = uniqueValues.length === 2 && uniqueValues.includes("0") && uniqueValues.includes("1");
-                if (isBoolean) {
-                    container.innerHTML = `
-            <select class="form-select form-select-sm filter-boolean">
-              <option value="" selected>Select</option>
-              <option value="1">True</option>
-              <option value="0">False</option>
+            // Generic function to add a dynamic filter row into a container.
+            function addDynamicFilterRow(container, columns, colTypes) {
+                const row = document.createElement("div");
+                row.className = "row dynamic-filter-row align-items-center";
+                row.innerHTML = `
+          <div class="col-4 col-sm-4 col-md-5">
+            <select class="form-select form-select-sm filter-column">
+              <option value="" disabled selected>Select column</option>
             </select>
-          `;
+          </div>
+          <div class="col-6 col-sm-6 col-md-5 filter-input-container">
+            <!-- Dynamic input will appear here -->
+          </div>
+          <div class="col-2 col-sm-2 col-md-2 text-end">
+            <button type="button" class="btn btn-danger btn-sm remove-filter">X</button>
+          </div>
+        `;
+                const select = row.querySelector(".filter-column");
+                select.innerHTML += columns.map(col => `<option value="${escapeHTML(col)}">${escapeHTML(col)}</option>`).join('');
+                select.addEventListener("change", function () {
+                    updateFilterInputRow(row, this.value, colTypes, getDataByType(container));
+                });
+                row.querySelector(".remove-filter").addEventListener("click", () => row.remove());
+                container.appendChild(row);
+            }
+
+            // Helper: get data array based on container (nodes, edges, or components)
+            function getDataByType(container) {
+                if (container.id === "nodesFiltersContainer") return nodesData;
+                if (container.id === "edgesFiltersContainer") return edgesData;
+                if (container.id === "componentsFiltersContainer") return componentsData;
+                return [];
+            }
+
+            // Update dynamic filter input based on column type.
+            function updateFilterInputRow(filterRow, column, colTypes, data) {
+                const container = filterRow.querySelector(".filter-input-container");
+                const colType = colTypes[column];
+                if (colType === "number") {
+                    const uniqueValues = [...new Set(data.map(n => n[column]))];
+                    const isBoolean = uniqueValues.length === 2 && uniqueValues.includes("0") && uniqueValues.includes("1");
+                    if (isBoolean) {
+                        container.innerHTML = `
+              <select class="form-select form-select-sm filter-boolean">
+                <option value="" selected>Select</option>
+                <option value="1">True</option>
+                <option value="0">False</option>
+              </select>
+            `;
+                    } else {
+                        container.innerHTML = `
+              <div class="input-group input-group-sm">
+                <span class="input-group-text">Min</span>
+                <input type="number" class="form-control filter-min" placeholder="Min">
+                <span class="input-group-text">Max</span>
+                <input type="number" class="form-control filter-max" placeholder="Max">
+              </div>
+            `;
+                    }
                 } else {
+                    const uniqueValues = [...new Set(data.map(n => n[column]))].sort();
+                    const optionsHTML = uniqueValues.map(v => `<option value="${escapeHTML(v)}">${escapeHTML(v)}</option>`).join('');
                     container.innerHTML = `
-            <div class="input-group input-group-sm">
-              <span class="input-group-text">Min</span>
-              <input type="number" class="form-control filter-min" placeholder="Min">
-              <span class="input-group-text">Max</span>
-              <input type="number" class="form-control filter-max" placeholder="Max">
+            <select multiple class="form-select form-select-sm filter-values" size="3">
+              ${optionsHTML}
+            </select>
+            <div class="form-check mt-1">
+              <input class="form-check-input filter-exclude" type="checkbox" id="exclude-${column}">
+              <label class="form-check-label" for="exclude-${column}" style="font-size: 0.85rem;">Exclude</label>
             </div>
           `;
                 }
-            } else {
-                const uniqueValues = [...new Set(nodesData.map(n => n[column]))].sort();
-                const optionsHTML = uniqueValues.map(v => `<option value="${escapeHTML(v)}">${escapeHTML(v)}</option>`).join('');
-                container.innerHTML = `
-          <select multiple class="form-select form-select-sm filter-values" size="3">
-            ${optionsHTML}
-          </select>
-          <div class="form-check mt-1">
-            <input class="form-check-input filter-exclude" type="checkbox" id="exclude-${column}">
-            <label class="form-check-label" for="exclude-${column}" style="font-size: 0.85rem;">Exclude</label>
-          </div>
-        `;
             }
-        }
 
-        // Build share state from gene selection and dynamic filters.
-        function getShareState() {
-            const state = {};
-            state.genes = selectedGenes;
-            state.filters = [];
-            const dynamicFilters = document.querySelectorAll(".dynamic-filter-row");
-            dynamicFilters.forEach(row => {
-                const col = row.querySelector(".filter-column").value;
-                if (!col) return;
-                const filter = { column: col, type: nodesColumnTypes[col] };
-                if (filter.type === "number") {
-                    const boolSelect = row.querySelector(".filter-boolean");
-                    if (boolSelect) {
-                        filter.value = boolSelect.value;
-                    } else {
-                        filter.min = row.querySelector(".filter-min").value;
-                        filter.max = row.querySelector(".filter-max").value;
-                    }
-                } else {
-                    const selectEl = row.querySelector(".filter-values");
-                    filter.values = Array.from(selectEl.selectedOptions).map(opt => opt.value);
-                    filter.exclude = row.querySelector(".filter-exclude").checked;
-                }
-                state.filters.push(filter);
-            });
-            return state;
-        }
-
-        // Update URL with compressed share state and copy to clipboard.
-        function shareResults() {
-            const state = getShareState();
-            const stateStr = LZString.compressToEncodedURIComponent(JSON.stringify(state));
-            const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + "?shareState=" + stateStr;
-            window.history.pushState({ path: newUrl }, '', newUrl);
-            navigator.clipboard.writeText(newUrl).then(() => {
-                const shareBtn = document.getElementById("shareResults");
-                shareBtn.textContent = "Link Copied!";
-                setTimeout(() => { shareBtn.textContent = "Share Results"; }, 2000);
-            }).catch(err => { console.error("Could not copy link: ", err); });
-        }
-
-        // Restore share state from URL if present.
-        function loadShareState() {
-            const params = new URLSearchParams(window.location.search);
-            if (params.has("shareState")) {
-                try {
-                    const compressedState = params.get("shareState");
-                    const state = JSON.parse(LZString.decompressFromEncodedURIComponent(compressedState));
-                    if (state.genes) {
-                        selectedGenes = state.genes;
-                        updateGeneTags();
-                    }
-                    if (state.filters) {
-                        state.filters.forEach(filter => {
-                            const container = document.getElementById("dynamicFiltersContainer");
-                            const row = document.createElement("div");
-                            row.className = "row dynamic-filter-row mb-2 align-items-center";
-                            row.innerHTML = `
-                <div class="col-4 col-sm-4 col-md-5">
-                  <select class="form-select form-select-sm filter-column">
-                    <option value="" disabled>Select column</option>
-                  </select>
-                </div>
-                <div class="col-6 col-sm-6 col-md-5 filter-input-container"></div>
-                <div class="col-2 col-sm-2 col-md-2 text-end">
-                  <button type="button" class="btn btn-danger btn-sm remove-filter">X</button>
-                </div>
-              `;
-                            const select = row.querySelector(".filter-column");
-                            select.innerHTML += nodesColumns.map(col => `<option value="${escapeHTML(col)}">${escapeHTML(col)}</option>`).join('');
-                            select.value = filter.column;
-                            updateFilterInput(row, filter.column);
-                            if (filter.type === "number") {
-                                const boolSelect = row.querySelector(".filter-boolean");
-                                if (boolSelect) {
-                                    boolSelect.value = filter.value || "";
-                                } else {
-                                    row.querySelector(".filter-min").value = filter.min || "";
-                                    row.querySelector(".filter-max").value = filter.max || "";
-                                }
-                            } else {
-                                const selectEl = row.querySelector(".filter-values");
-                                if (filter.values) {
-                                    Array.from(selectEl.options).forEach(option => {
-                                        if (filter.values.includes(option.value)) {
-                                            option.selected = true;
-                                        }
-                                    });
-                                }
-                                row.querySelector(".filter-exclude").checked = filter.exclude || false;
-                            }
-                            row.querySelector(".remove-filter").addEventListener("click", () => row.remove());
-                            container.appendChild(row);
-                        });
-                    }
-                } catch (e) {
-                    console.error("Error loading share state:", e);
-                }
-            }
-        }
-
-        // Apply dynamic filters and update DataTables.
-        function applyFilters() {
-            getSelectedGenesFromBox();
-            let base = nodesData;
-            if (selectedGenes.length) {
-                const matched = nodesData.filter(n =>
-                    selectedGenes.some(q => n.gene_name.toLowerCase().includes(q.toLowerCase()) && n.gene_name.length >= q.length)
-                );
-                const ids = new Set(matched.map(n => n.id));
-                edgesData.forEach(e => {
-                    if (ids.has(e.source) || ids.has(e.target)) {
-                        ids.add(e.source);
-                        ids.add(e.target);
-                    }
-                });
-                base = nodesData.filter(n => ids.has(n.id));
-            }
-            let filteredNodes = base; // No static filters.
-
-            // Apply dynamic filters.
-            const dynamicFilters = document.querySelectorAll(".dynamic-filter-row");
-            dynamicFilters.forEach(filterRow => {
-                const col = filterRow.querySelector(".filter-column").value;
-                if (!col) return;
-                const type = nodesColumnTypes[col];
-                if (type === "number") {
-                    const boolSelect = filterRow.querySelector(".filter-boolean");
-                    if (boolSelect) {
-                        const selectedValue = boolSelect.value;
-                        if (selectedValue !== "") {
-                            filteredNodes = filteredNodes.filter(n => n[col] === selectedValue);
+            // Get filters from a given container.
+            function getFiltersFromContainer(container, colTypes) {
+                const filters = [];
+                container.querySelectorAll(".dynamic-filter-row").forEach(row => {
+                    const col = row.querySelector(".filter-column").value;
+                    if (!col) return;
+                    const filter = { column: col, type: colTypes[col] };
+                    if (filter.type === "number") {
+                        const boolSelect = row.querySelector(".filter-boolean");
+                        if (boolSelect) {
+                            filter.value = boolSelect.value;
+                        } else {
+                            filter.min = row.querySelector(".filter-min").value;
+                            filter.max = row.querySelector(".filter-max").value;
                         }
                     } else {
-                        const minInput = filterRow.querySelector(".filter-min").value;
-                        const maxInput = filterRow.querySelector(".filter-max").value;
-                        filteredNodes = filteredNodes.filter(n => {
-                            const val = parseFloat(n[col]);
-                            if (minInput !== "" && !isNaN(parseFloat(minInput)) && val < parseFloat(minInput)) return false;
-                            if (maxInput !== "" && !isNaN(parseFloat(maxInput)) && val > parseFloat(maxInput)) return false;
-                            return true;
-                        });
+                        const selectEl = row.querySelector(".filter-values");
+                        filter.values = Array.from(selectEl.selectedOptions).map(opt => opt.value);
+                        filter.exclude = row.querySelector(".filter-exclude").checked;
                     }
-                } else {
-                    const selectEl = filterRow.querySelector(".filter-values");
-                    const selectedValues = Array.from(selectEl.selectedOptions).map(opt => opt.value);
-                    if (selectedValues.length > 0) {
-                        const exclude = filterRow.querySelector(".filter-exclude").checked;
-                        filteredNodes = filteredNodes.filter(n => {
-                            return exclude ? !selectedValues.includes(n[col]) : selectedValues.includes(n[col]);
-                        });
+                    filters.push(filter);
+                });
+                return filters;
+            }
+
+            // Check if container has any filters.
+            function containerHasFilters(container) {
+                return container.querySelectorAll(".dynamic-filter-row").length > 0;
+            }
+
+            // Build share state from gene selection and all dynamic filters.
+            function getShareState() {
+                const state = {};
+                state.genes = selectedGenes;
+                state.nodeFilters = getFiltersFromContainer(document.getElementById("nodesFiltersContainer"), nodesColumnTypes);
+                state.edgeFilters = getFiltersFromContainer(document.getElementById("edgesFiltersContainer"), edgesColumnTypes);
+                state.componentFilters = getFiltersFromContainer(document.getElementById("componentsFiltersContainer"), componentsColumnTypes);
+                return state;
+            }
+
+            // Update URL with compressed share state and copy to clipboard.
+            function shareResults() {
+                const state = getShareState();
+                const stateStr = LZString.compressToEncodedURIComponent(JSON.stringify(state));
+                const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname + "?shareState=" + stateStr;
+                window.history.pushState({ path: newUrl }, '', newUrl);
+                navigator.clipboard.writeText(newUrl).then(() => {
+                    const shareBtn = document.getElementById("shareResults");
+                    shareBtn.textContent = "Link Copied!";
+                    setTimeout(() => { shareBtn.textContent = "Share Results"; }, 2000);
+                }).catch(err => { console.error("Could not copy link: ", err); });
+            }
+
+            // Restore share state from URL if present.
+            function loadShareState() {
+                const params = new URLSearchParams(window.location.search);
+                if (params.has("shareState")) {
+                    try {
+                        const compressedState = params.get("shareState");
+                        const state = JSON.parse(LZString.decompressFromEncodedURIComponent(compressedState));
+                        if (state.genes) {
+                            selectedGenes = state.genes;
+                            updateGeneTags();
+                        }
+                        if (state.nodeFilters) {
+                            state.nodeFilters.forEach(filter => {
+                                addDynamicFilterRow(document.getElementById("nodesFiltersContainer"), nodesColumns, nodesColumnTypes);
+                                const row = document.querySelector("#nodesFiltersContainer .dynamic-filter-row:last-child");
+                                row.querySelector(".filter-column").value = filter.column;
+                                updateFilterInputRow(row, filter.column, nodesColumnTypes, nodesData);
+                                if (filter.type === "number") {
+                                    const boolSelect = row.querySelector(".filter-boolean");
+                                    if (boolSelect) {
+                                        boolSelect.value = filter.value || "";
+                                    } else {
+                                        row.querySelector(".filter-min").value = filter.min || "";
+                                        row.querySelector(".filter-max").value = filter.max || "";
+                                    }
+                                } else {
+                                    const selectEl = row.querySelector(".filter-values");
+                                    if (filter.values) {
+                                        Array.from(selectEl.options).forEach(option => {
+                                            if (filter.values.includes(option.value)) option.selected = true;
+                                        });
+                                    }
+                                    row.querySelector(".filter-exclude").checked = filter.exclude || false;
+                                }
+                            });
+                        }
+                        if (state.edgeFilters) {
+                            state.edgeFilters.forEach(filter => {
+                                addDynamicFilterRow(document.getElementById("edgesFiltersContainer"), edgesColumns, edgesColumnTypes);
+                                const row = document.querySelector("#edgesFiltersContainer .dynamic-filter-row:last-child");
+                                row.querySelector(".filter-column").value = filter.column;
+                                updateFilterInputRow(row, filter.column, edgesColumnTypes, edgesData);
+                                if (filter.type === "number") {
+                                    const boolSelect = row.querySelector(".filter-boolean");
+                                    if (boolSelect) {
+                                        boolSelect.value = filter.value || "";
+                                    } else {
+                                        row.querySelector(".filter-min").value = filter.min || "";
+                                        row.querySelector(".filter-max").value = filter.max || "";
+                                    }
+                                } else {
+                                    const selectEl = row.querySelector(".filter-values");
+                                    if (filter.values) {
+                                        Array.from(selectEl.options).forEach(option => {
+                                            if (filter.values.includes(option.value)) option.selected = true;
+                                        });
+                                    }
+                                    row.querySelector(".filter-exclude").checked = filter.exclude || false;
+                                }
+                            });
+                        }
+                        if (state.componentFilters) {
+                            state.componentFilters.forEach(filter => {
+                                addDynamicFilterRow(document.getElementById("componentsFiltersContainer"), componentsColumns, componentsColumnTypes);
+                                const row = document.querySelector("#componentsFiltersContainer .dynamic-filter-row:last-child");
+                                row.querySelector(".filter-column").value = filter.column;
+                                updateFilterInputRow(row, filter.column, componentsColumnTypes, componentsData);
+                                if (filter.type === "number") {
+                                    const boolSelect = row.querySelector(".filter-boolean");
+                                    if (boolSelect) {
+                                        boolSelect.value = filter.value || "";
+                                    } else {
+                                        row.querySelector(".filter-min").value = filter.min || "";
+                                        row.querySelector(".filter-max").value = filter.max || "";
+                                    }
+                                } else {
+                                    const selectEl = row.querySelector(".filter-values");
+                                    if (filter.values) {
+                                        Array.from(selectEl.options).forEach(option => {
+                                            if (filter.values.includes(option.value)) option.selected = true;
+                                        });
+                                    }
+                                    row.querySelector(".filter-exclude").checked = filter.exclude || false;
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.error("Error loading share state:", e);
                     }
                 }
+            }
+
+            // Generic function to apply filters on data given a container and column types.
+            function applyFiltersOnData(data, container, colTypes, extraFilterFn) {
+                let filtered = data;
+                if (extraFilterFn) {
+                    filtered = filtered.filter(extraFilterFn);
+                }
+                if (containerHasFilters(container)) {
+                    const filters = getFiltersFromContainer(container, colTypes);
+                    filters.forEach(filter => {
+                        if (filter.type === "number") {
+                            if (filter.value !== undefined) {
+                                filtered = filtered.filter(d => d[filter.column] === filter.value);
+                            } else {
+                                filtered = filtered.filter(d => {
+                                    const val = parseFloat(d[filter.column]);
+                                    if (filter.min !== "" && !isNaN(parseFloat(filter.min)) && val < parseFloat(filter.min)) return false;
+                                    if (filter.max !== "" && !isNaN(parseFloat(filter.max)) && val > parseFloat(filter.max)) return false;
+                                    return true;
+                                });
+                            }
+                        } else {
+                            filtered = filtered.filter(d => {
+                                const include = filter.values.includes(d[filter.column]);
+                                return filter.exclude ? !include : include;
+                            });
+                        }
+                    });
+                }
+                return filtered;
+            }
+
+            // Apply all filters and update views.
+            function applyFiltersAll() {
+                getSelectedGenesFromBox();
+                // Apply gene filter to nodes if any.
+                const nodesExtraFilter = selectedGenes.length ? (n => selectedGenes.some(q => n.gene_name.toLowerCase().includes(q.toLowerCase()))) : null;
+                const filteredNodesByFilter = applyFiltersOnData(nodesData, document.getElementById("nodesFiltersContainer"), nodesColumnTypes, nodesExtraFilter);
+                const filteredEdgesByFilter = applyFiltersOnData(edgesData, document.getElementById("edgesFiltersContainer"), edgesColumnTypes);
+                const filteredComponents = applyFiltersOnData(componentsData, document.getElementById("componentsFiltersContainer"), componentsColumnTypes);
+
+                // Determine final node set by intersecting:
+                let finalNodeIds = new Set(filteredNodesByFilter.map(n => n.id));
+                // If any edge filters applied, intersect with nodes present in filtered edges.
+                if (containerHasFilters(document.getElementById("edgesFiltersContainer"))) {
+                    const nodesFromEdges = new Set();
+                    filteredEdgesByFilter.forEach(e => { nodesFromEdges.add(e.source); nodesFromEdges.add(e.target); });
+                    finalNodeIds = new Set([...finalNodeIds].filter(id => nodesFromEdges.has(id)));
+                }
+                // If any component filters applied, intersect with nodes present in filtered components.
+                if (containerHasFilters(document.getElementById("componentsFiltersContainer"))) {
+                    const nodesFromComponents = new Set();
+                    filteredComponents.forEach(comp => {
+                        comp.node_ids.split(";").forEach(id => nodesFromComponents.add(id));
+                    });
+                    finalNodeIds = new Set([...finalNodeIds].filter(id => nodesFromComponents.has(id)));
+                }
+                const finalNodes = nodesData.filter(n => finalNodeIds.has(n.id));
+                // Final edges: from filteredEdgesByFilter, keep only those connecting final nodes.
+                const finalEdges = filteredEdgesByFilter.filter(e => finalNodeIds.has(e.source) && finalNodeIds.has(e.target));
+
+                // Update DataTables.
+                $('#nodesTable').DataTable().clear().rows.add(finalNodes).draw();
+                $('#componentsTable').DataTable().clear().rows.add(filteredComponents).draw();
+
+                // Update stats.
+                const statsBox = document.getElementById("statsBox");
+                statsBox.classList.remove("d-none");
+                statsBox.innerHTML = `${finalNodes.length} nodes, ${finalEdges.length} edges, ${new Set(finalNodes.map(n => n.component_id)).size} component(s).`;
+
+                return { finalNodes, finalEdges };
+            }
+
+            // Enhanced interactive graph visualization.
+            function showGraph(nodes, edges) {
+                const container = document.getElementById("graphContainer");
+                container.style.display = "block";
+                const graphData = {
+                    nodes: nodes.map(n => {
+                        const label = n.gene_name && n.gene_name !== "unknown" ? `${n.gene_name} (${n.id})` : n.id;
+                        return { id: n.id, label: label, title: `Gene: ${n.gene_name}\nID: ${n.id}` };
+                    }),
+                    edges: edges.map(e => ({ from: e.source, to: e.target }))
+                };
+                const options = {
+                    physics: {
+                        stabilization: true,
+                        barnesHut: {
+                            gravitationalConstant: -20000,
+                            springLength: 250
+                        }
+                    },
+                    interaction: {
+                        tooltipDelay: 200,
+                        hover: true
+                    },
+                    nodes: {
+                        shape: 'dot',
+                        size: 10,
+                        font: { size: 14, color: '#343a40' }
+                    },
+                    edges: {
+                        width: 2
+                    }
+                };
+                const network = new vis.Network(container, graphData, options);
+                network.on("click", function (params) {
+                    if (params.nodes.length > 0) {
+                        let nodeId = params.nodes[0];
+                        let nodeData = nodes.find(n => n.id === nodeId);
+                        if (nodeData) {
+                            document.getElementById("nodeDetailsContent").innerHTML = `<pre>${JSON.stringify(nodeData, null, 2)}</pre>`;
+                            var modal = new bootstrap.Modal(document.getElementById('nodeDetailsModal'));
+                            modal.show();
+                        }
+                    }
+                });
+            }
+
+            // Download ZIP with all filtered files.
+            function downloadZip(finalNodes, finalEdges) {
+                const zip = new JSZip();
+                zip.file("filtered_nodes.tsv", toTSV(finalNodes));
+                zip.file("filtered_edges.tsv", toTSV(finalEdges));
+                zip.file("filtered_nodes.bed", toBED(finalNodes));
+
+                // Compute full component files.
+                const adj = {};
+                nodesData.forEach(n => { adj[n.id] = []; });
+                edgesData.forEach(e => {
+                    if (adj[e.source] && adj[e.target]) {
+                        adj[e.source].push(e.target);
+                        adj[e.target].push(e.source);
+                    }
+                });
+                const filteredIds = new Set(finalNodes.map(n => n.id));
+                const visited = new Set();
+                const fullComponentIds = new Set();
+                function dfs(nodeId) {
+                    if (visited.has(nodeId)) return;
+                    visited.add(nodeId);
+                    fullComponentIds.add(nodeId);
+                    (adj[nodeId] || []).forEach(neighbor => dfs(neighbor));
+                }
+                filteredIds.forEach(id => { if (!visited.has(id)) dfs(id); });
+                const fullComponentNodes = nodesData.filter(n => fullComponentIds.has(n.id));
+                const fullComponentEdges = edgesData.filter(e => fullComponentIds.has(e.source) && fullComponentIds.has(e.target));
+                zip.file("filtered_edges_full_component.tsv", toTSV(fullComponentEdges));
+                zip.file("filtered_nodes_full_component.bed", toBED(fullComponentNodes));
+
+                zip.generateAsync({ type: "blob" }).then(file => {
+                    downloadFile(file, document.getElementById("filePrefix").value + "filtered_data.zip", "application/zip");
+                });
+            }
+
+            // Download individual files.
+            function downloadIndividualFile(filename, content) {
+                const prefix = document.getElementById("filePrefix").value || "";
+                downloadFile(content, prefix + filename, "text/plain");
+            }
+
+            document.getElementById("downloadNodesTsv").addEventListener("click", () => {
+                const { finalNodes, finalEdges } = applyFiltersAll();
+                downloadIndividualFile("filtered_nodes.tsv", toTSV(finalNodes));
+            });
+            document.getElementById("downloadEdgesTsv").addEventListener("click", () => {
+                const { finalNodes, finalEdges } = applyFiltersAll();
+                downloadIndividualFile("filtered_edges.tsv", toTSV(finalEdges));
+            });
+            document.getElementById("downloadNodesBed").addEventListener("click", () => {
+                const { finalNodes } = applyFiltersAll();
+                downloadIndividualFile("filtered_nodes.bed", toBED(finalNodes));
+            });
+            document.getElementById("downloadFullEdgesTsv").addEventListener("click", () => {
+                const { finalNodes } = applyFiltersAll();
+                const adj = {};
+                nodesData.forEach(n => { adj[n.id] = []; });
+                edgesData.forEach(e => {
+                    if (adj[e.source] && adj[e.target]) {
+                        adj[e.source].push(e.target);
+                        adj[e.target].push(e.source);
+                    }
+                });
+                const filteredIds = new Set(finalNodes.map(n => n.id));
+                const visited = new Set();
+                const fullComponentIds = new Set();
+                function dfs(nodeId) {
+                    if (visited.has(nodeId)) return;
+                    visited.add(nodeId);
+                    fullComponentIds.add(nodeId);
+                    (adj[nodeId] || []).forEach(neighbor => dfs(neighbor));
+                }
+                filteredIds.forEach(id => { if (!visited.has(id)) dfs(id); });
+                const fullComponentEdges = edgesData.filter(e => fullComponentIds.has(e.source) && fullComponentIds.has(e.target));
+                downloadIndividualFile("filtered_edges_full_component.tsv", toTSV(fullComponentEdges));
+            });
+            document.getElementById("downloadFullNodesBed").addEventListener("click", () => {
+                const { finalNodes } = applyFiltersAll();
+                const adj = {};
+                nodesData.forEach(n => { adj[n.id] = []; });
+                edgesData.forEach(e => {
+                    if (adj[e.source] && adj[e.target]) {
+                        adj[e.source].push(e.target);
+                        adj[e.target].push(e.source);
+                    }
+                });
+                const filteredIds = new Set(finalNodes.map(n => n.id));
+                const visited = new Set();
+                const fullComponentIds = new Set();
+                function dfs(nodeId) {
+                    if (visited.has(nodeId)) return;
+                    visited.add(nodeId);
+                    fullComponentIds.add(nodeId);
+                    (adj[nodeId] || []).forEach(neighbor => dfs(neighbor));
+                }
+                filteredIds.forEach(id => { if (!visited.has(id)) dfs(id); });
+                const fullComponentNodes = nodesData.filter(n => fullComponentIds.has(n.id));
+                downloadIndividualFile("filtered_nodes_full_component.bed", toBED(fullComponentNodes));
             });
 
-            const ids = new Set(filteredNodes.map(n => n.id));
-            const filteredEdges = edgesData.filter(e => ids.has(e.source) && ids.has(e.target));
+            document.getElementById("shareResults").onclick = shareResults;
 
-            $('#nodesTable').DataTable().clear().rows.add(filteredNodes).draw();
-            $('#edgesTable').DataTable().clear().rows.add(filteredEdges).draw();
-
-            const statsBox = document.getElementById("statsBox");
-            statsBox.classList.remove("d-none");
-            statsBox.innerHTML = `${filteredNodes.length} nodes, ${filteredEdges.length} edges, ${new Set(filteredNodes.map(n => n.component_id)).size} component(s).`;
-
-            return { filteredNodes, filteredEdges };
-        }
-
-        function showGraph(nodes, edges) {
-            const container = document.getElementById("graphContainer");
-            container.style.display = "block";
-            const graph = {
-                nodes: nodes.map(n => {
-                    const label = n.gene_name && n.gene_name !== "unknown" ? `${n.gene_name} (${n.id})` : n.id;
-                    return { id: n.id, label: label, title: `Gene: ${n.gene_name}\nID: ${n.id}` };
-                }),
-                edges: edges.map(e => ({ from: e.source, to: e.target }))
+            document.getElementById("applyFilters").onclick = () => {
+                applyFiltersAll();
+                document.getElementById("graphContainer").style.display = "none";
             };
-            new vis.Network(container, graph, { physics: { stabilization: true } });
-        }
 
-        function downloadZip(nodes, edges) {
-            const zip = new JSZip();
-            zip.file("filtered_nodes.tsv", toTSV(nodes));
-            zip.file("filtered_edges.tsv", toTSV(edges));
-            zip.file("filtered_nodes.bed", toBED(nodes));
+            document.getElementById("visualizeGraph").onclick = () => {
+                const { finalNodes, finalEdges } = applyFiltersAll();
+                showGraph(finalNodes, finalEdges);
+            };
 
-            // Compute full component files.
-            const adj = {};
-            nodesData.forEach(n => { adj[n.id] = []; });
-            edgesData.forEach(e => {
-                if (adj[e.source] && adj[e.target]) {
-                    adj[e.source].push(e.target);
-                    adj[e.target].push(e.source);
-                }
+            // Set up Add Filter buttons for each filter container.
+            document.getElementById("addNodeFilter").addEventListener("click", () => {
+                addDynamicFilterRow(document.getElementById("nodesFiltersContainer"), nodesColumns, nodesColumnTypes);
             });
-            const filteredIds = new Set(nodes.map(n => n.id));
-            const visited = new Set();
-            const fullComponentIds = new Set();
-            function dfs(nodeId) {
-                if (visited.has(nodeId)) return;
-                visited.add(nodeId);
-                fullComponentIds.add(nodeId);
-                (adj[nodeId] || []).forEach(neighbor => dfs(neighbor));
-            }
-            filteredIds.forEach(id => { if (!visited.has(id)) dfs(id); });
-            const fullComponentNodes = nodesData.filter(n => fullComponentIds.has(n.id));
-            const fullComponentEdges = edgesData.filter(e => fullComponentIds.has(e.source) && fullComponentIds.has(e.target));
-            zip.file("filtered_edges_full_component.tsv", toTSV(fullComponentEdges));
-            zip.file("filtered_nodes_full_component.bed", toBED(fullComponentNodes));
-
-            zip.generateAsync({ type: "blob" }).then(file => {
-                downloadFile(file, "filtered_data.zip", "application/zip");
+            document.getElementById("addEdgeFilter").addEventListener("click", () => {
+                addDynamicFilterRow(document.getElementById("edgesFiltersContainer"), edgesColumns, edgesColumnTypes);
             });
-        }
-
-        // Download individual files.
-        function downloadIndividualFile(filename, content) {
-            const prefix = document.getElementById("filePrefix").value || "";
-            downloadFile(content, prefix + filename, "text/plain");
-        }
-
-        document.getElementById("downloadNodesTsv").addEventListener("click", () => {
-            const { filteredNodes } = applyFilters();
-            downloadIndividualFile("filtered_nodes.tsv", toTSV(filteredNodes));
-        });
-        document.getElementById("downloadEdgesTsv").addEventListener("click", () => {
-            const { filteredEdges } = applyFilters();
-            downloadIndividualFile("filtered_edges.tsv", toTSV(filteredEdges));
-        });
-        document.getElementById("downloadNodesBed").addEventListener("click", () => {
-            const { filteredNodes } = applyFilters();
-            downloadIndividualFile("filtered_nodes.bed", toBED(filteredNodes));
-        });
-        document.getElementById("downloadFullEdgesTsv").addEventListener("click", () => {
-            const { filteredNodes } = applyFilters();
-            const adj = {};
-            nodesData.forEach(n => { adj[n.id] = []; });
-            edgesData.forEach(e => {
-                if (adj[e.source] && adj[e.target]) {
-                    adj[e.source].push(e.target);
-                    adj[e.target].push(e.source);
-                }
+            document.getElementById("addComponentFilter").addEventListener("click", () => {
+                addDynamicFilterRow(document.getElementById("componentsFiltersContainer"), componentsColumns, componentsColumnTypes);
             });
-            const filteredIds = new Set(filteredNodes.map(n => n.id));
-            const visited = new Set();
-            const fullComponentIds = new Set();
-            function dfs(nodeId) {
-                if (visited.has(nodeId)) return;
-                visited.add(nodeId);
-                fullComponentIds.add(nodeId);
-                (adj[nodeId] || []).forEach(neighbor => dfs(neighbor));
-            }
-            filteredIds.forEach(id => { if (!visited.has(id)) dfs(id); });
-            const fullComponentEdges = edgesData.filter(e => fullComponentIds.has(e.source) && fullComponentIds.has(e.target));
-            downloadIndividualFile("filtered_edges_full_component.tsv", toTSV(fullComponentEdges));
-        });
-        document.getElementById("downloadFullNodesBed").addEventListener("click", () => {
-            const { filteredNodes } = applyFilters();
-            const adj = {};
-            nodesData.forEach(n => { adj[n.id] = []; });
-            edgesData.forEach(e => {
-                if (adj[e.source] && adj[e.target]) {
-                    adj[e.source].push(e.target);
-                    adj[e.target].push(e.source);
-                }
-            });
-            const filteredIds = new Set(filteredNodes.map(n => n.id));
-            const visited = new Set();
-            const fullComponentIds = new Set();
-            function dfs(nodeId) {
-                if (visited.has(nodeId)) return;
-                visited.add(nodeId);
-                fullComponentIds.add(nodeId);
-                (adj[nodeId] || []).forEach(neighbor => dfs(neighbor));
-            }
-            filteredIds.forEach(id => { if (!visited.has(id)) dfs(id); });
-            const fullComponentNodes = nodesData.filter(n => fullComponentIds.has(n.id));
-            downloadIndividualFile("filtered_nodes_full_component.bed", toBED(fullComponentNodes));
-        });
 
-        document.getElementById("shareResults").onclick = shareResults;
+            // Initialize DataTables.
+            $('#nodesTable').DataTable({ data: [], columns: [] });
+            $('#componentsTable').DataTable({ data: [], columns: [] });
 
-        // Event listeners for gene input and dynamic filters.
-        document.getElementById("geneTags").addEventListener("input", e => {
-            const inputText = e.target.innerText || '';
-            const latest = inputText.split(",").pop().trim();
-            if (latest && latest.length >= 2) {
-                autocomplete(latest);
-            } else {
-                document.getElementById("suggestions").innerHTML = '';
-            }
-        });
-
-        document.getElementById("addFilter").addEventListener("click", addDynamicFilterRow);
-
-        document.getElementById("applyFilters").onclick = () => {
-            applyFilters();
-            document.getElementById("graphContainer").style.display = "none";
-        };
-
-        document.getElementById("visualizeGraph").onclick = () => {
-            const { filteredNodes, filteredEdges } = applyFilters();
-            showGraph(filteredNodes, filteredEdges);
-        };
-
-        // Load TSV data and restore share state.
-        document.addEventListener("DOMContentLoaded", () => {
+            // Load TSV Data and restore share state.
             loadTSV("nodes_metadata.tsv", (data, cols) => {
                 nodesData = data;
                 nodesColumns = cols;
@@ -695,12 +853,29 @@
                     nodesColumnTypes[col] = (!isNaN(parseFloat(firstVal)) && isFinite(firstVal)) ? "number" : "categorical";
                 });
                 geneList = [...new Set(data.map(d => d.gene_name).filter(g => g !== "unknown"))];
+                // Reinitialize nodes table with columns.
+                $('#nodesTable').DataTable().destroy();
                 $('#nodesTable').DataTable({ data: [], columns: cols.map(c => ({ title: c, data: c })) });
                 loadShareState();
             });
             loadTSV("edges.tsv", (data, cols) => {
                 edgesData = data;
-                $('#edgesTable').DataTable({ data: [], columns: cols.map(c => ({ title: c, data: c })) });
+                edgesColumns = cols;
+                cols.forEach(col => {
+                    const firstVal = data[0][col];
+                    edgesColumnTypes[col] = (!isNaN(parseFloat(firstVal)) && isFinite(firstVal)) ? "number" : "categorical";
+                });
+                // (Edges table view removed – used only for filtering and graph.)
+            });
+            loadTSV("connected_components_summary.tsv", (data, cols) => {
+                componentsData = data;
+                componentsColumns = cols;
+                cols.forEach(col => {
+                    const firstVal = data[0][col];
+                    componentsColumnTypes[col] = (!isNaN(parseFloat(firstVal)) && isFinite(firstVal)) ? "number" : "categorical";
+                });
+                $('#componentsTable').DataTable().destroy();
+                $('#componentsTable').DataTable({ data: [], columns: cols.map(c => ({ title: c, data: c })) });
             });
         });
     </script>
