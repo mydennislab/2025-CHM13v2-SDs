@@ -199,6 +199,12 @@
             <div class="col-auto">
                 <button type="button" id="shareResults" class="btn btn-info">Share Results</button>
             </div>
+            <div class="col-auto d-flex align-items-center">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="removeIsolatedNodes">
+                    <label class="form-check-label" for="removeIsolatedNodes">Remove isolated nodes</label>
+                </div>
+            </div>
         </div>
 
         <!-- File Downloads Section -->
@@ -521,24 +527,30 @@
                             state.nodeFilters.forEach(filter => {
                                 addDynamicFilterRow(document.getElementById("nodesFiltersContainer"), nodesColumns, nodesColumnTypes);
                                 const row = document.querySelector("#nodesFiltersContainer .dynamic-filter-row:last-child");
-                                row.querySelector(".filter-column").value = filter.column;
-                                updateFilterInputRow(row, filter.column, nodesColumnTypes, nodesData);
-                                if (filter.type === "number") {
-                                    const boolSelect = row.querySelector(".filter-boolean");
-                                    if (boolSelect) {
-                                        boolSelect.value = filter.value || "";
+                                if (row) {
+                                    const filterCol = row.querySelector(".filter-column");
+                                    if (filterCol) filterCol.value = filter.column;
+                                    updateFilterInputRow(row, filter.column, nodesColumnTypes, nodesData);
+                                    if (filter.type === "number") {
+                                        const boolSelect = row.querySelector(".filter-boolean");
+                                        if (boolSelect) {
+                                            boolSelect.value = filter.value || "";
+                                        } else {
+                                            const minEl = row.querySelector(".filter-min");
+                                            if (minEl) minEl.value = filter.min || "";
+                                            const maxEl = row.querySelector(".filter-max");
+                                            if (maxEl) maxEl.value = filter.max || "";
+                                        }
                                     } else {
-                                        row.querySelector(".filter-min").value = filter.min || "";
-                                        row.querySelector(".filter-max").value = filter.max || "";
+                                        const selectEl = row.querySelector(".filter-values");
+                                        if (selectEl && filter.values) {
+                                            Array.from(selectEl.options).forEach(option => {
+                                                if (filter.values.includes(option.value)) option.selected = true;
+                                            });
+                                        }
+                                        const excludeEl = row.querySelector(".filter-exclude");
+                                        if (excludeEl) excludeEl.checked = filter.exclude || false;
                                     }
-                                } else {
-                                    const selectEl = row.querySelector(".filter-values");
-                                    if (filter.values) {
-                                        Array.from(selectEl.options).forEach(option => {
-                                            if (filter.values.includes(option.value)) option.selected = true;
-                                        });
-                                    }
-                                    row.querySelector(".filter-exclude").checked = filter.exclude || false;
                                 }
                             });
                         }
@@ -546,24 +558,30 @@
                             state.edgeFilters.forEach(filter => {
                                 addDynamicFilterRow(document.getElementById("edgesFiltersContainer"), edgesColumns, edgesColumnTypes);
                                 const row = document.querySelector("#edgesFiltersContainer .dynamic-filter-row:last-child");
-                                row.querySelector(".filter-column").value = filter.column;
-                                updateFilterInputRow(row, filter.column, edgesColumnTypes, edgesData);
-                                if (filter.type === "number") {
-                                    const boolSelect = row.querySelector(".filter-boolean");
-                                    if (boolSelect) {
-                                        boolSelect.value = filter.value || "";
+                                if (row) {
+                                    const filterCol = row.querySelector(".filter-column");
+                                    if (filterCol) filterCol.value = filter.column;
+                                    updateFilterInputRow(row, filter.column, edgesColumnTypes, edgesData);
+                                    if (filter.type === "number") {
+                                        const boolSelect = row.querySelector(".filter-boolean");
+                                        if (boolSelect) {
+                                            boolSelect.value = filter.value || "";
+                                        } else {
+                                            const minEl = row.querySelector(".filter-min");
+                                            if (minEl) minEl.value = filter.min || "";
+                                            const maxEl = row.querySelector(".filter-max");
+                                            if (maxEl) maxEl.value = filter.max || "";
+                                        }
                                     } else {
-                                        row.querySelector(".filter-min").value = filter.min || "";
-                                        row.querySelector(".filter-max").value = filter.max || "";
+                                        const selectEl = row.querySelector(".filter-values");
+                                        if (selectEl && filter.values) {
+                                            Array.from(selectEl.options).forEach(option => {
+                                                if (filter.values.includes(option.value)) option.selected = true;
+                                            });
+                                        }
+                                        const excludeEl = row.querySelector(".filter-exclude");
+                                        if (excludeEl) excludeEl.checked = filter.exclude || false;
                                     }
-                                } else {
-                                    const selectEl = row.querySelector(".filter-values");
-                                    if (filter.values) {
-                                        Array.from(selectEl.options).forEach(option => {
-                                            if (filter.values.includes(option.value)) option.selected = true;
-                                        });
-                                    }
-                                    row.querySelector(".filter-exclude").checked = filter.exclude || false;
                                 }
                             });
                         }
@@ -571,24 +589,30 @@
                             state.componentFilters.forEach(filter => {
                                 addDynamicFilterRow(document.getElementById("componentsFiltersContainer"), componentsColumns, componentsColumnTypes);
                                 const row = document.querySelector("#componentsFiltersContainer .dynamic-filter-row:last-child");
-                                row.querySelector(".filter-column").value = filter.column;
-                                updateFilterInputRow(row, filter.column, componentsColumnTypes, componentsData);
-                                if (filter.type === "number") {
-                                    const boolSelect = row.querySelector(".filter-boolean");
-                                    if (boolSelect) {
-                                        boolSelect.value = filter.value || "";
+                                if (row) {
+                                    const filterCol = row.querySelector(".filter-column");
+                                    if (filterCol) filterCol.value = filter.column;
+                                    updateFilterInputRow(row, filter.column, componentsColumnTypes, componentsData);
+                                    if (filter.type === "number") {
+                                        const boolSelect = row.querySelector(".filter-boolean");
+                                        if (boolSelect) {
+                                            boolSelect.value = filter.value || "";
+                                        } else {
+                                            const minEl = row.querySelector(".filter-min");
+                                            if (minEl) minEl.value = filter.min || "";
+                                            const maxEl = row.querySelector(".filter-max");
+                                            if (maxEl) maxEl.value = filter.max || "";
+                                        }
                                     } else {
-                                        row.querySelector(".filter-min").value = filter.min || "";
-                                        row.querySelector(".filter-max").value = filter.max || "";
+                                        const selectEl = row.querySelector(".filter-values");
+                                        if (selectEl && filter.values) {
+                                            Array.from(selectEl.options).forEach(option => {
+                                                if (filter.values.includes(option.value)) option.selected = true;
+                                            });
+                                        }
+                                        const excludeEl = row.querySelector(".filter-exclude");
+                                        if (excludeEl) excludeEl.checked = filter.exclude || false;
                                     }
-                                } else {
-                                    const selectEl = row.querySelector(".filter-values");
-                                    if (filter.values) {
-                                        Array.from(selectEl.options).forEach(option => {
-                                            if (filter.values.includes(option.value)) option.selected = true;
-                                        });
-                                    }
-                                    row.querySelector(".filter-exclude").checked = filter.exclude || false;
                                 }
                             });
                         }
@@ -631,38 +655,78 @@
 
             // Apply all filters and update views.
             function applyFiltersAll() {
-                getSelectedGenesFromBox();
-                // Apply gene filter to nodes if any.
-                const nodesExtraFilter = selectedGenes.length ? (n => selectedGenes.some(q => n.gene_name.toLowerCase().includes(q.toLowerCase()))) : null;
-                const filteredNodesByFilter = applyFiltersOnData(nodesData, document.getElementById("nodesFiltersContainer"), nodesColumnTypes, nodesExtraFilter);
-                const filteredEdgesByFilter = applyFiltersOnData(edgesData, document.getElementById("edgesFiltersContainer"), edgesColumnTypes);
-                const filteredComponents = applyFiltersOnData(componentsData, document.getElementById("componentsFiltersContainer"), componentsColumnTypes);
-
-                // Determine final node set by intersecting:
-                let finalNodeIds = new Set(filteredNodesByFilter.map(n => n.id));
-                // If any edge filters applied, intersect with nodes present in filtered edges.
-                if (containerHasFilters(document.getElementById("edgesFiltersContainer"))) {
-                    const nodesFromEdges = new Set();
-                    filteredEdgesByFilter.forEach(e => { nodesFromEdges.add(e.source); nodesFromEdges.add(e.target); });
-                    finalNodeIds = new Set([...finalNodeIds].filter(id => nodesFromEdges.has(id)));
-                }
-                // If any component filters applied, intersect with nodes present in filtered components.
-                if (containerHasFilters(document.getElementById("componentsFiltersContainer"))) {
-                    const nodesFromComponents = new Set();
-                    filteredComponents.forEach(comp => {
-                        comp.node_ids.split(";").forEach(id => nodesFromComponents.add(id));
+                // Step 1: Apply node dynamic filters (ignoring gene query)
+                let allowedNodes = applyFiltersOnData(nodesData, document.getElementById("nodesFiltersContainer"), nodesColumnTypes);
+                const allowedIds = new Set(allowedNodes.map(n => n.id));
+                // Apply edge filters on edges among allowed nodes.
+                let allowedEdges = applyFiltersOnData(edgesData, document.getElementById("edgesFiltersContainer"), edgesColumnTypes)
+                    .filter(e => allowedIds.has(e.source) && allowedIds.has(e.target));
+                // If gene query exists, select allowed nodes that match gene query and then compute connected components.
+                let finalNodeIds = new Set();
+                if (selectedGenes.length > 0) {
+                    const geneMatched = allowedNodes.filter(n => selectedGenes.some(q => n.gene_name.toLowerCase().includes(q.toLowerCase())));
+                    const geneMatchedIds = new Set(geneMatched.map(n => n.id));
+                    // Build induced graph (adjacency list) on allowed nodes using allowedEdges.
+                    const adj = {};
+                    allowedNodes.forEach(n => { adj[n.id] = []; });
+                    allowedEdges.forEach(e => {
+                        if (adj[e.source]) adj[e.source].push(e.target);
+                        if (adj[e.target]) adj[e.target].push(e.source);
                     });
-                    finalNodeIds = new Set([...finalNodeIds].filter(id => nodesFromComponents.has(id)));
+                    const visited = new Set();
+                    function dfs(nodeId, component) {
+                        visited.add(nodeId);
+                        component.push(nodeId);
+                        (adj[nodeId] || []).forEach(neighbor => {
+                            if (!visited.has(neighbor)) {
+                                dfs(neighbor, component);
+                            }
+                        });
+                    }
+                    const components = [];
+                    allowedNodes.forEach(n => {
+                        if (!visited.has(n.id)) {
+                            let comp = [];
+                            dfs(n.id, comp);
+                            components.push(comp);
+                        }
+                    });
+                    // Keep entire components that contain at least one gene-matched node.
+                    components.forEach(comp => {
+                        if (comp.some(id => geneMatchedIds.has(id))) {
+                            comp.forEach(id => finalNodeIds.add(id));
+                        }
+                    });
+                } else {
+                    allowedNodes.forEach(n => finalNodeIds.add(n.id));
                 }
-                const finalNodes = nodesData.filter(n => finalNodeIds.has(n.id));
-                // Final edges: from filteredEdgesByFilter, keep only those connecting final nodes.
-                const finalEdges = filteredEdgesByFilter.filter(e => finalNodeIds.has(e.source) && finalNodeIds.has(e.target));
+                // Further restrict by component filters if any.
+                const filteredComponents = applyFiltersOnData(componentsData, document.getElementById("componentsFiltersContainer"), componentsColumnTypes);
+                if (containerHasFilters(document.getElementById("componentsFiltersContainer"))) {
+                    const compNodes = new Set();
+                    filteredComponents.forEach(comp => {
+                        comp.node_ids.split(";").forEach(id => compNodes.add(id));
+                    });
+                    finalNodeIds = new Set([...finalNodeIds].filter(id => compNodes.has(id)));
+                }
+                let finalNodes = nodesData.filter(n => finalNodeIds.has(n.id));
+                let finalEdges = allowedEdges.filter(e => finalNodeIds.has(e.source) && finalNodeIds.has(e.target));
+
+                // Option: Remove isolated nodes (not connected to any edge).
+                if (document.getElementById("removeIsolatedNodes").checked) {
+                    const connectedIds = new Set();
+                    finalEdges.forEach(e => {
+                        connectedIds.add(e.source);
+                        connectedIds.add(e.target);
+                    });
+                    finalNodes = finalNodes.filter(n => connectedIds.has(n.id));
+                    finalEdges = finalEdges.filter(e => connectedIds.has(e.source) && connectedIds.has(e.target));
+                }
 
                 // Update DataTables.
                 $('#nodesTable').DataTable().clear().rows.add(finalNodes).draw();
                 $('#componentsTable').DataTable().clear().rows.add(filteredComponents).draw();
 
-                // Update stats.
                 const statsBox = document.getElementById("statsBox");
                 statsBox.classList.remove("d-none");
                 statsBox.innerHTML = `${finalNodes.length} nodes, ${finalEdges.length} edges, ${new Set(finalNodes.map(n => n.component_id)).size} component(s).`;
@@ -723,16 +787,14 @@
                 zip.file("filtered_edges.tsv", toTSV(finalEdges));
                 zip.file("filtered_nodes.bed", toBED(finalNodes));
 
-                // Compute full component files.
+                // Compute full connected components on the final filtered set.
+                const finalIds = new Set(finalNodes.map(n => n.id));
                 const adj = {};
-                nodesData.forEach(n => { adj[n.id] = []; });
-                edgesData.forEach(e => {
-                    if (adj[e.source] && adj[e.target]) {
-                        adj[e.source].push(e.target);
-                        adj[e.target].push(e.source);
-                    }
+                finalNodes.forEach(n => { adj[n.id] = []; });
+                finalEdges.forEach(e => {
+                    if (adj[e.source] && finalIds.has(e.target)) { adj[e.source].push(e.target); }
+                    if (adj[e.target] && finalIds.has(e.source)) { adj[e.target].push(e.source); }
                 });
-                const filteredIds = new Set(finalNodes.map(n => n.id));
                 const visited = new Set();
                 const fullComponentIds = new Set();
                 function dfs(nodeId) {
@@ -741,14 +803,15 @@
                     fullComponentIds.add(nodeId);
                     (adj[nodeId] || []).forEach(neighbor => dfs(neighbor));
                 }
-                filteredIds.forEach(id => { if (!visited.has(id)) dfs(id); });
-                const fullComponentNodes = nodesData.filter(n => fullComponentIds.has(n.id));
-                const fullComponentEdges = edgesData.filter(e => fullComponentIds.has(e.source) && fullComponentIds.has(e.target));
+                finalNodes.forEach(n => { if (!visited.has(n.id)) dfs(n.id); });
+                const fullComponentNodes = finalNodes.filter(n => fullComponentIds.has(n.id));
+                const fullComponentEdges = finalEdges.filter(e => fullComponentIds.has(e.source) && fullComponentIds.has(e.target));
                 zip.file("filtered_edges_full_component.tsv", toTSV(fullComponentEdges));
                 zip.file("filtered_nodes_full_component.bed", toBED(fullComponentNodes));
 
                 zip.generateAsync({ type: "blob" }).then(file => {
-                    downloadFile(file, document.getElementById("filePrefix").value + "filtered_data.zip", "application/zip");
+                    const prefix = document.getElementById("filePrefix").value || "";
+                    downloadFile(file, prefix + "filtered_data.zip", "application/zip");
                 });
             }
 
@@ -758,12 +821,17 @@
                 downloadFile(content, prefix + filename, "text/plain");
             }
 
-            document.getElementById("downloadNodesTsv").addEventListener("click", () => {
+            // Set up event listeners for downloads.
+            document.getElementById("downloadZip").addEventListener("click", () => {
                 const { finalNodes, finalEdges } = applyFiltersAll();
+                downloadZip(finalNodes, finalEdges);
+            });
+            document.getElementById("downloadNodesTsv").addEventListener("click", () => {
+                const { finalNodes } = applyFiltersAll();
                 downloadIndividualFile("filtered_nodes.tsv", toTSV(finalNodes));
             });
             document.getElementById("downloadEdgesTsv").addEventListener("click", () => {
-                const { finalNodes, finalEdges } = applyFiltersAll();
+                const { finalEdges } = applyFiltersAll();
                 downloadIndividualFile("filtered_edges.tsv", toTSV(finalEdges));
             });
             document.getElementById("downloadNodesBed").addEventListener("click", () => {
@@ -771,16 +839,15 @@
                 downloadIndividualFile("filtered_nodes.bed", toBED(finalNodes));
             });
             document.getElementById("downloadFullEdgesTsv").addEventListener("click", () => {
-                const { finalNodes } = applyFiltersAll();
+                const { finalNodes, finalEdges } = applyFiltersAll();
+                // Use DFS on finalNodes & finalEdges.
+                const finalIds = new Set(finalNodes.map(n => n.id));
                 const adj = {};
-                nodesData.forEach(n => { adj[n.id] = []; });
-                edgesData.forEach(e => {
-                    if (adj[e.source] && adj[e.target]) {
-                        adj[e.source].push(e.target);
-                        adj[e.target].push(e.source);
-                    }
+                finalNodes.forEach(n => { adj[n.id] = []; });
+                finalEdges.forEach(e => {
+                    if (adj[e.source] && finalIds.has(e.target)) { adj[e.source].push(e.target); }
+                    if (adj[e.target] && finalIds.has(e.source)) { adj[e.target].push(e.source); }
                 });
-                const filteredIds = new Set(finalNodes.map(n => n.id));
                 const visited = new Set();
                 const fullComponentIds = new Set();
                 function dfs(nodeId) {
@@ -789,21 +856,21 @@
                     fullComponentIds.add(nodeId);
                     (adj[nodeId] || []).forEach(neighbor => dfs(neighbor));
                 }
-                filteredIds.forEach(id => { if (!visited.has(id)) dfs(id); });
-                const fullComponentEdges = edgesData.filter(e => fullComponentIds.has(e.source) && fullComponentIds.has(e.target));
+                finalNodes.forEach(n => { if (!visited.has(n.id)) dfs(n.id); });
+                const fullComponentEdges = finalEdges.filter(e => fullComponentIds.has(e.source) && fullComponentIds.has(e.target));
                 downloadIndividualFile("filtered_edges_full_component.tsv", toTSV(fullComponentEdges));
             });
             document.getElementById("downloadFullNodesBed").addEventListener("click", () => {
                 const { finalNodes } = applyFiltersAll();
+                // DFS on finalNodes.
+                const finalIds = new Set(finalNodes.map(n => n.id));
                 const adj = {};
-                nodesData.forEach(n => { adj[n.id] = []; });
-                edgesData.forEach(e => {
-                    if (adj[e.source] && adj[e.target]) {
-                        adj[e.source].push(e.target);
-                        adj[e.target].push(e.source);
-                    }
+                finalNodes.forEach(n => { adj[n.id] = []; });
+                const { finalEdges } = applyFiltersAll();
+                finalEdges.forEach(e => {
+                    if (adj[e.source] && finalIds.has(e.target)) { adj[e.source].push(e.target); }
+                    if (adj[e.target] && finalIds.has(e.source)) { adj[e.target].push(e.source); }
                 });
-                const filteredIds = new Set(finalNodes.map(n => n.id));
                 const visited = new Set();
                 const fullComponentIds = new Set();
                 function dfs(nodeId) {
@@ -812,18 +879,16 @@
                     fullComponentIds.add(nodeId);
                     (adj[nodeId] || []).forEach(neighbor => dfs(neighbor));
                 }
-                filteredIds.forEach(id => { if (!visited.has(id)) dfs(id); });
-                const fullComponentNodes = nodesData.filter(n => fullComponentIds.has(n.id));
+                finalNodes.forEach(n => { if (!visited.has(n.id)) dfs(n.id); });
+                const fullComponentNodes = finalNodes.filter(n => fullComponentIds.has(n.id));
                 downloadIndividualFile("filtered_nodes_full_component.bed", toBED(fullComponentNodes));
             });
 
             document.getElementById("shareResults").onclick = shareResults;
-
             document.getElementById("applyFilters").onclick = () => {
                 applyFiltersAll();
                 document.getElementById("graphContainer").style.display = "none";
             };
-
             document.getElementById("visualizeGraph").onclick = () => {
                 const { finalNodes, finalEdges } = applyFiltersAll();
                 showGraph(finalNodes, finalEdges);
@@ -853,7 +918,6 @@
                     nodesColumnTypes[col] = (!isNaN(parseFloat(firstVal)) && isFinite(firstVal)) ? "number" : "categorical";
                 });
                 geneList = [...new Set(data.map(d => d.gene_name).filter(g => g !== "unknown"))];
-                // Reinitialize nodes table with columns.
                 $('#nodesTable').DataTable().destroy();
                 $('#nodesTable').DataTable({ data: [], columns: cols.map(c => ({ title: c, data: c })) });
                 loadShareState();
@@ -865,7 +929,7 @@
                     const firstVal = data[0][col];
                     edgesColumnTypes[col] = (!isNaN(parseFloat(firstVal)) && isFinite(firstVal)) ? "number" : "categorical";
                 });
-                // (Edges table view removed – used only for filtering and graph.)
+                // Edges table view removed – used only for filtering and graph.
             });
             loadTSV("connected_components_summary.tsv", (data, cols) => {
                 componentsData = data;
