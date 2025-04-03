@@ -73,7 +73,7 @@
 </head>
 
 <body class="container-fluid">
-    <h1 class="mb-4 text-center">🧬 CHM13 Segmental Duplication viewer</h1>
+    <h1 class="mb-4 text-center">🧬 Structural Duplication Graph Browser</h1>
 
     <!-- Multi-gene Input -->
     <div class="mb-3">
@@ -201,9 +201,14 @@
             box.appendChild(document.createElement("br"));
         }
 
+        // Modified autocomplete to only include gene names containing the query
+        // and whose length is greater or equal to the query length.
         function autocomplete(input) {
             const match = input.toLowerCase();
-            const hits = geneList.filter(g => g.toLowerCase().includes(match)).slice(0, 10);
+            const hits = geneList.filter(g => {
+                const lower = g.toLowerCase();
+                return lower.includes(match) && g.length >= input.length;
+            }).slice(0, 10);
             const box = document.getElementById("suggestions");
             box.innerHTML = hits.map(g => `<div class="autocomplete-suggestion">${g}</div>`).join('');
             document.querySelectorAll('.autocomplete-suggestion').forEach(el => {
@@ -216,6 +221,7 @@
             });
         }
 
+        // When reading selected genes, no change is needed.
         function getSelectedGenesFromBox() {
             const raw = document.getElementById("geneTags").innerText;
             const genes = raw
@@ -226,6 +232,8 @@
             updateGeneTags();
         }
 
+        // Modified filtering: now a node is matched if its gene name contains any
+        // of the query strings (case-insensitive) and has a length >= query length.
         function applyFilters() {
             getSelectedGenesFromBox();
             const fTelo = document.getElementById("filterTelomeric").checked;
@@ -237,7 +245,13 @@
 
             let base = nodesData;
             if (selectedGenes.length) {
-                const matched = nodesData.filter(n => selectedGenes.includes(n.gene_name));
+                const matched = nodesData.filter(n => {
+                    return selectedGenes.some(q => {
+                        const query = q.toLowerCase();
+                        const geneName = n.gene_name.toLowerCase();
+                        return geneName.includes(query) && n.gene_name.length >= query.length;
+                    });
+                });
                 const ids = new Set(matched.map(n => n.id));
                 edgesData.forEach(e => { if (ids.has(e.source) || ids.has(e.target)) { ids.add(e.source); ids.add(e.target); } });
                 base = nodesData.filter(n => ids.has(n.id));
@@ -295,12 +309,15 @@
             new vis.Network(container, graph, { physics: { stabilization: true } });
         }
 
+        // Updated export function to include full connected components for filtered nodes.
         function downloadZip(nodes, edges) {
             const zip = new JSZip();
             const toTSV = (arr) => {
                 const keys = Object.keys(arr[0] || {});
                 return [keys.join("\t")].concat(arr.map(obj => keys.map(k => obj[k]).join("\t"))).join("\n");
             };
+
+            // Create basic export files (filtered nodes, edges, and BED for nodes)
             const bed = nodes.map(n => {
                 const [chr, rng] = n.id.split(":");
                 const [s, e] = rng.split("-");
@@ -309,6 +326,41 @@
             zip.file("filtered_nodes.tsv", toTSV(nodes));
             zip.file("filtered_edges.tsv", toTSV(edges));
             zip.file("filtered_nodes.bed", bed);
+
+            // --- Compute full connected components for filtered nodes ---
+            // Build an adjacency list for the entire graph (nodesData and edgesData)
+            const adj = {};
+            nodesData.forEach(n => { adj[n.id] = []; });
+            edgesData.forEach(e => {
+                if (adj[e.source] && adj[e.target]) {
+                    adj[e.source].push(e.target);
+                    adj[e.target].push(e.source);
+                }
+            });
+            const filteredIds = new Set(nodes.map(n => n.id));
+            const visited = new Set();
+            const fullComponentIds = new Set();
+            function dfs(nodeId) {
+                if (visited.has(nodeId)) return;
+                visited.add(nodeId);
+                fullComponentIds.add(nodeId);
+                (adj[nodeId] || []).forEach(neighbor => dfs(neighbor));
+            }
+            filteredIds.forEach(id => {
+                if (!visited.has(id)) dfs(id);
+            });
+            // Get full component nodes and edges from the full graph.
+            const fullComponentNodes = nodesData.filter(n => fullComponentIds.has(n.id));
+            const fullComponentEdges = edgesData.filter(e => fullComponentIds.has(e.source) && fullComponentIds.has(e.target));
+            const fullComponentBed = fullComponentNodes.map(n => {
+                const [chr, rng] = n.id.split(":");
+                const [s, e] = rng.split("-");
+                return `${chr}\t${s}\t${e}`;
+            }).join("\n");
+
+            zip.file("filtered_edges_full_component.tsv", toTSV(fullComponentEdges));
+            zip.file("filtered_nodes_full_component.bed", fullComponentBed);
+
             zip.generateAsync({ type: "blob" }).then(file => {
                 const a = document.createElement("a");
                 a.href = URL.createObjectURL(file);
