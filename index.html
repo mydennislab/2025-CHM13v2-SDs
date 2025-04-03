@@ -226,6 +226,11 @@
                         Component Edges TSV</button>
                     <button type="button" id="downloadFullNodesBed" class="btn btn-outline-primary btn-sm">Download Full
                         Component Nodes BED</button>
+                    <!-- New buttons -->
+                    <button type="button" id="downloadComponentsTsv" class="btn btn-outline-primary btn-sm">Download
+                        Filtered Components TSV</button>
+                    <button type="button" id="downloadComponentsZip" class="btn btn-outline-primary btn-sm">Download
+                        Separated Components ZIP</button>
                 </div>
             </div>
         </div>
@@ -496,6 +501,7 @@
                 state.nodeFilters = getFiltersFromContainer(document.getElementById("nodesFiltersContainer"), nodesColumnTypes);
                 state.edgeFilters = getFiltersFromContainer(document.getElementById("edgesFiltersContainer"), edgesColumnTypes);
                 state.componentFilters = getFiltersFromContainer(document.getElementById("componentsFiltersContainer"), componentsColumnTypes);
+                state.removeIsolated = document.getElementById("removeIsolatedNodes").checked;
                 return state;
             }
 
@@ -616,6 +622,19 @@
                                 }
                             });
                         }
+                        // Restore removal checkbox state.
+                        if (state.hasOwnProperty("removeIsolated")) {
+                            document.getElementById("removeIsolatedNodes").checked = state.removeIsolated;
+                        }
+                        // After loading the share state, auto apply filters and visualize.
+                        setTimeout(() => {
+                            const results = applyFiltersAll();
+                            if (results.finalNodes.length > 1000) {
+                                alert("Visualization aborted: More than 1000 nodes to display.");
+                            } else {
+                                showGraph(results.finalNodes, results.finalEdges);
+                            }
+                        }, 500);
                     } catch (e) {
                         console.error("Error loading share state:", e);
                     }
@@ -702,13 +721,13 @@
                 }
                 // Further restrict by component filters if any.
                 const filteredComponents = applyFiltersOnData(componentsData, document.getElementById("componentsFiltersContainer"), componentsColumnTypes);
-                if (containerHasFilters(document.getElementById("componentsFiltersContainer"))) {
-                    const compNodes = new Set();
-                    filteredComponents.forEach(comp => {
-                        comp.node_ids.split(";").forEach(id => compNodes.add(id));
-                    });
-                    finalNodeIds = new Set([...finalNodeIds].filter(id => compNodes.has(id)));
-                }
+                // Update each component: keep only node_ids present in finalNodeIds.
+                let finalComponents = filteredComponents.map(comp => {
+                    let new_ids = comp.node_ids.split(";").filter(id => finalNodeIds.has(id));
+                    let newComp = Object.assign({}, comp);
+                    newComp.node_ids = new_ids.join(";");
+                    return newComp;
+                }).filter(comp => comp.node_ids.trim() !== "");
                 let finalNodes = nodesData.filter(n => finalNodeIds.has(n.id));
                 let finalEdges = allowedEdges.filter(e => finalNodeIds.has(e.source) && finalNodeIds.has(e.target));
 
@@ -721,21 +740,35 @@
                     });
                     finalNodes = finalNodes.filter(n => connectedIds.has(n.id));
                     finalEdges = finalEdges.filter(e => connectedIds.has(e.source) && connectedIds.has(e.target));
+                    // Also update finalComponents to only include nodes that are still present.
+                    finalComponents = finalComponents.map(comp => {
+                        let new_ids = comp.node_ids.split(";").filter(id => finalNodes.some(n => n.id === id));
+                        let newComp = Object.assign({}, comp);
+                        newComp.node_ids = new_ids.join(";");
+                        return newComp;
+                    }).filter(comp => comp.node_ids.trim() !== "");
                 }
 
                 // Update DataTables.
                 $('#nodesTable').DataTable().clear().rows.add(finalNodes).draw();
-                $('#componentsTable').DataTable().clear().rows.add(filteredComponents).draw();
+                $('#componentsTable').DataTable().clear().rows.add(finalComponents).draw();
+
+                // Compute unique genes.
+                const uniqueGenes = new Set(finalNodes.map(n => n.gene_name).filter(g => g && g.toLowerCase() !== "unknown"));
 
                 const statsBox = document.getElementById("statsBox");
                 statsBox.classList.remove("d-none");
-                statsBox.innerHTML = `${finalNodes.length} nodes, ${finalEdges.length} edges, ${new Set(finalNodes.map(n => n.component_id)).size} component(s).`;
+                statsBox.innerHTML = `${finalNodes.length} nodes, ${finalEdges.length} edges, ${finalComponents.length} component(s), ${uniqueGenes.size} unique gene(s).`;
 
-                return { finalNodes, finalEdges };
+                return { finalNodes, finalEdges, finalComponents };
             }
 
             // Enhanced interactive graph visualization.
             function showGraph(nodes, edges) {
+                if (nodes.length > 1000) {
+                    alert("Visualization aborted: More than 1000 nodes to display.");
+                    return;
+                }
                 const container = document.getElementById("graphContainer");
                 container.style.display = "block";
                 const graphData = {
@@ -743,7 +776,11 @@
                         const label = n.gene_name && n.gene_name !== "unknown" ? `${n.gene_name} (${n.id})` : n.id;
                         return { id: n.id, label: label, title: `Gene: ${n.gene_name}\nID: ${n.id}` };
                     }),
-                    edges: edges.map(e => ({ from: e.source, to: e.target }))
+                    edges: edges.map(e => ({
+                        from: e.source,
+                        to: e.target,
+                        title: Object.entries(e).map(([k, v]) => `${k}: ${v}`).join("\n")
+                    }))
                 };
                 const options = {
                     physics: {
@@ -821,9 +858,29 @@
                 downloadFile(content, prefix + filename, "text/plain");
             }
 
+            // New: Download filtered components as TSV.
+            function downloadComponentsTSV(finalComponents) {
+                downloadIndividualFile("filtered_components.tsv", toTSV(finalComponents));
+            }
+
+            // New: Download separate components ZIP (each component as a separate BED file).
+            function downloadComponentsZip(finalComponents, finalNodes) {
+                const zip = new JSZip();
+                finalComponents.forEach(comp => {
+                    const compNodeIds = comp.node_ids.split(";");
+                    const compNodes = finalNodes.filter(n => compNodeIds.includes(n.id));
+                    // Each component BED file is named using its component_id.
+                    zip.file(`component_${comp.component_id}.bed`, toBED(compNodes));
+                });
+                zip.generateAsync({ type: "blob" }).then(file => {
+                    const prefix = document.getElementById("filePrefix").value || "";
+                    downloadFile(file, prefix + "separated_components.zip", "application/zip");
+                });
+            }
+
             // Set up event listeners for downloads.
             document.getElementById("downloadZip").addEventListener("click", () => {
-                const { finalNodes, finalEdges } = applyFiltersAll();
+                const { finalNodes, finalEdges, finalComponents } = applyFiltersAll();
                 downloadZip(finalNodes, finalEdges);
             });
             document.getElementById("downloadNodesTsv").addEventListener("click", () => {
@@ -840,7 +897,6 @@
             });
             document.getElementById("downloadFullEdgesTsv").addEventListener("click", () => {
                 const { finalNodes, finalEdges } = applyFiltersAll();
-                // Use DFS on finalNodes & finalEdges.
                 const finalIds = new Set(finalNodes.map(n => n.id));
                 const adj = {};
                 finalNodes.forEach(n => { adj[n.id] = []; });
@@ -862,7 +918,6 @@
             });
             document.getElementById("downloadFullNodesBed").addEventListener("click", () => {
                 const { finalNodes } = applyFiltersAll();
-                // DFS on finalNodes.
                 const finalIds = new Set(finalNodes.map(n => n.id));
                 const adj = {};
                 finalNodes.forEach(n => { adj[n.id] = []; });
@@ -882,6 +937,14 @@
                 finalNodes.forEach(n => { if (!visited.has(n.id)) dfs(n.id); });
                 const fullComponentNodes = finalNodes.filter(n => fullComponentIds.has(n.id));
                 downloadIndividualFile("filtered_nodes_full_component.bed", toBED(fullComponentNodes));
+            });
+            document.getElementById("downloadComponentsTsv").addEventListener("click", () => {
+                const { finalComponents } = applyFiltersAll();
+                downloadComponentsTSV(finalComponents);
+            });
+            document.getElementById("downloadComponentsZip").addEventListener("click", () => {
+                const { finalComponents, finalNodes } = applyFiltersAll();
+                downloadComponentsZip(finalComponents, finalNodes);
             });
 
             document.getElementById("shareResults").onclick = shareResults;
