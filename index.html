@@ -94,6 +94,7 @@
             background: #f0f0f0;
         }
 
+        /* Graph container with relative positioning for overlay controls */
         #graphContainer {
             height: 500px;
             border: 1px solid #ccc;
@@ -101,6 +102,7 @@
             margin-top: 1rem;
             margin-bottom: 1rem;
             display: none;
+            position: relative;
         }
 
         footer {
@@ -262,7 +264,7 @@
             <table id="componentsTable" class="table table-striped table-sm" style="width:100%"></table>
         </div>
 
-        <!-- Graph Container -->
+        <!-- Graph Container (Default view with overlay controls) -->
         <div id="graphContainer"></div>
     </div>
 
@@ -278,6 +280,23 @@
                 <div class="modal-body" id="nodeDetailsContent"></div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Graph Modal -->
+    <div class="modal fade" id="graphFullscreenModal" tabindex="-1" aria-labelledby="graphFullscreenModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="graphFullscreenModalLabel">Graph Fullscreen</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="position: relative;">
+                    <!-- The createGraphInContainer function will add the controls overlay and graph here -->
+                    <div id="graphFullscreen" style="height: calc(100vh - 120px);"></div>
                 </div>
             </div>
         </div>
@@ -302,10 +321,17 @@
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             // Global data arrays and column definitions.
-            let nodesData = [], edgesData = [], componentsData = [];
-            let geneList = [], selectedGenes = [];
-            let nodesColumns = [], edgesColumns = [], componentsColumns = [];
-            let nodesColumnTypes = {}, edgesColumnTypes = {}, componentsColumnTypes = {};
+            let nodesData = [],
+                edgesData = [],
+                componentsData = [];
+            let geneList = [],
+                selectedGenes = [];
+            let nodesColumns = [],
+                edgesColumns = [],
+                componentsColumns = [];
+            let nodesColumnTypes = {},
+                edgesColumnTypes = {},
+                componentsColumnTypes = {};
 
             // Updated toBED: now outputs 4 columns with 4th column as "{chr}:{start}-{end}-{gene_name}"
             function toBED(nodes) {
@@ -802,26 +828,56 @@
                 return { finalNodes, finalEdges, finalComponents };
             }
 
-            // Enhanced interactive graph visualization.
-            function showGraph(nodes, edges) {
-                if (nodes.length > 1000) {
-                    alert("Visualization aborted: More than 1000 nodes to display.");
-                    return;
-                }
-                const container = document.getElementById("graphContainer");
-                container.style.display = "block";
-                const graphData = {
-                    nodes: nodes.map(n => {
-                        const label = n.gene_name && n.gene_name !== "unknown" ? `${n.gene_name} (${n.id})` : n.id;
-                        return { id: n.id, label: label, title: `Gene: ${n.gene_name}\nID: ${n.id}` };
-                    }),
-                    edges: edges.map(e => ({
-                        from: e.source,
-                        to: e.target,
-                        title: Object.entries(e).map(([k, v]) => `${k}: ${v}`).join("\n")
-                    }))
+            // Function to create the graph (with controls overlay) in a specified container.
+            function createGraphInContainer(containerId, nodes, edges) {
+                const container = document.getElementById(containerId);
+                container.innerHTML = ""; // clear previous content
+                container.style.position = "relative";
+
+                // Create control overlay.
+                const controlPanel = document.createElement("div");
+                controlPanel.style.position = "absolute";
+                controlPanel.style.top = "10px";
+                controlPanel.style.left = "10px";
+                controlPanel.style.zIndex = "1000";
+                controlPanel.style.background = "rgba(255,255,255,0.8)";
+                controlPanel.style.padding = "10px";
+                controlPanel.style.borderRadius = "4px";
+                controlPanel.innerHTML = `
+          <input type="text" id="${containerId}_search" class="form-control form-control-sm mb-2" placeholder="Search nodes by gene">
+          <select id="${containerId}_layoutSelect" class="form-select form-select-sm mb-2">
+            <option value="force">Force Directed</option>
+            <option value="hierarchical">Hierarchical</option>
+          </select>
+          <button type="button" id="${containerId}_clearSelection" class="btn btn-secondary btn-sm mb-2">Clear Selection</button>
+          ${containerId === "graphContainer" ? '<button type="button" id="openFullscreen" class="btn btn-primary btn-sm mb-2">Fullscreen</button>' : '<button type="button" id="' + containerId + '_toggleFullscreen" class="btn btn-primary btn-sm mb-2">Minimize</button>'}
+        `;
+                container.appendChild(controlPanel);
+
+                // Create div to hold the graph.
+                const graphDiv = document.createElement("div");
+                graphDiv.id = containerId + "_graph";
+                graphDiv.style.height = "100%";
+                container.appendChild(graphDiv);
+
+                // Build graph data.
+                const graphNodes = nodes.map(n => {
+                    const label = n.gene_name && n.gene_name !== "unknown" ? `${n.gene_name} (${n.id})` : n.id;
+                    return { id: n.id, label: label, title: `Gene: ${n.gene_name}\nID: ${n.id}`, originalColor: undefined };
+                });
+                const graphEdges = edges.map(e => ({
+                    from: e.source,
+                    to: e.target,
+                    title: Object.entries(e).map(([k, v]) => `${k}: ${v}`).join("\n")
+                }));
+
+                const data = {
+                    nodes: new vis.DataSet(graphNodes),
+                    edges: new vis.DataSet(graphEdges)
                 };
-                const options = {
+
+                // Default network options.
+                let options = {
                     physics: {
                         stabilization: true,
                         barnesHut: {
@@ -842,7 +898,66 @@
                         width: 2
                     }
                 };
-                const network = new vis.Network(container, graphData, options);
+
+                let network = new vis.Network(graphDiv, data, options);
+
+                // Save original colors for each node.
+                data.nodes.forEach(node => {
+                    data.nodes.update({ id: node.id, originalColor: node.color });
+                });
+
+                // Search functionality.
+                document.getElementById(containerId + "_search").addEventListener("input", function () {
+                    const searchTerm = this.value.trim().toLowerCase();
+                    data.nodes.forEach(function (node) {
+                        let originalColor = node.originalColor || undefined;
+                        if (searchTerm !== "" && node.label.toLowerCase().includes(searchTerm)) {
+                            data.nodes.update({ id: node.id, color: { background: 'yellow' } });
+                        } else {
+                            data.nodes.update({ id: node.id, color: originalColor });
+                        }
+                    });
+                });
+
+                // Clear selection button.
+                document.getElementById(containerId + "_clearSelection").addEventListener("click", function () {
+                    document.getElementById(containerId + "_search").value = "";
+                    data.nodes.forEach(function (node) {
+                        let originalColor = node.originalColor || undefined;
+                        data.nodes.update({ id: node.id, color: originalColor });
+                    });
+                    network.unselectAll();
+                });
+
+                // Layout control.
+                document.getElementById(containerId + "_layoutSelect").addEventListener("change", function () {
+                    const layoutType = this.value;
+                    if (layoutType === "hierarchical") {
+                        network.setOptions({ layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed' } } });
+                    } else {
+                        network.setOptions({ layout: { hierarchical: false } });
+                    }
+                });
+
+                // Fullscreen / Minimize button.
+                if (containerId === "graphContainer") {
+                    document.getElementById("openFullscreen").addEventListener("click", function () {
+                        const modal = new bootstrap.Modal(document.getElementById('graphFullscreenModal'));
+                        modal.show();
+                        // After modal is shown, create the full-screen graph.
+                        setTimeout(() => {
+                            createGraphInContainer("graphFullscreen", nodes, edges);
+                        }, 300);
+                    });
+                } else {
+                    document.getElementById(containerId + "_toggleFullscreen").addEventListener("click", function () {
+                        const modalEl = document.getElementById('graphFullscreenModal');
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        modal.hide();
+                    });
+                }
+
+                // Node click event to show details.
                 network.on("click", function (params) {
                     if (params.nodes.length > 0) {
                         let nodeId = params.nodes[0];
@@ -854,6 +969,19 @@
                         }
                     }
                 });
+
+                return network;
+            }
+
+            // Enhanced interactive graph visualization.
+            function showGraph(nodes, edges) {
+                if (nodes.length > 1000) {
+                    alert("Visualization aborted: More than 1000 nodes to display.");
+                    return;
+                }
+                const container = document.getElementById("graphContainer");
+                container.style.display = "block";
+                createGraphInContainer("graphContainer", nodes, edges);
             }
 
             // Download ZIP with all filtered files.
