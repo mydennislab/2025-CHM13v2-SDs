@@ -1,4 +1,6 @@
-# [CLICK HERE TO VISUALIZE](https://cosmograph.app/run/?data=https://gist.githubusercontent.com/mr-eyes/4adf803fdc1200c99580a5c23b6fba3c/raw/1d81a2f0d012c2f2ed516fd18dcb4382dc242eaa/edges_no_extra.tsv&source=source&target=target&gravity=0.46&repulsion=0.55&repulsionTheta=0.53&linkSpring=1.46&linkDistance=8&friction=0.97&renderLabels=true&renderHoveredLabel=true&renderLinks=true&curvedLinks=true&nodeSizeScale=0.8&linkWidthScale=2&linkArrowsSizeScale=1&nodeSize=size-total%20links&nodeColor=color-total%20links&linkWidth=width-default&linkColor=color-default&meta=https://gist.githubusercontent.com/mr-eyes/4adf803fdc1200c99580a5c23b6fba3c/raw/1d81a2f0d012c2f2ed516fd18dcb4382dc242eaa/nodes_metadata.tsv)
+<h1> <a href="https://mydennislab.github.io/2025-CHM13v2-SDs/" target="_blank" style="display:inline-block; padding: 14px 28px; background: linear-gradient(135deg, #4f46e5, #3b82f6); color: #fff; font-size: 16px; font-weight: 600; text-decoration: none; border-radius: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.2); transition: transform 0.2s ease-in-out; cursor: pointer;">
+  🚀 Launch the Interactive Dashboard
+</a> </h1>
 
 
 ## `nodes_metadata.tsv`
