@@ -40,7 +40,7 @@
             padding: 2rem;
         }
 
-        /* Gene tags input: container holds tags and a dedicated text input */
+        /* Gene tags input */
         #geneTagsContainer {
             display: flex;
             flex-wrap: wrap;
@@ -94,7 +94,7 @@
             background: #f0f0f0;
         }
 
-        /* Graph container with relative positioning for overlay controls */
+        /* Graph container */
         #graphContainer {
             height: 500px;
             border: 1px solid #ccc;
@@ -135,22 +135,20 @@
         <h1>CHM13v2.0 Segmental Duplications Dashboard</h1>
         <p class="lead">Explore, filter segmental duplications.</p>
     </header>
-
     <!-- Main Content Container -->
     <div class="main-container">
         <!-- Gene Input Section -->
         <div class="mb-4">
             <label class="form-label">Search genes (comma-separated, case-insensitive):</label>
             <div id="geneTagsContainer">
-                <!-- Existing gene tags will be added here -->
                 <input type="text" id="geneInput" placeholder="Type gene name and press Enter">
             </div>
             <div id="suggestions" class="autocomplete-suggestions"></div>
             <button type="button" id="loadExample" class="btn btn-info btn-sm mt-2">Load Example Genes</button>
         </div>
-
         <!-- Dynamic Filters Accordion -->
         <div class="accordion mb-4" id="filterAccordion">
+            <!-- Nodes Filters -->
             <div class="accordion-item">
                 <h2 class="accordion-header" id="headingNodes">
                     <button class="accordion-button" type="button" data-bs-toggle="collapse"
@@ -167,6 +165,7 @@
                     </div>
                 </div>
             </div>
+            <!-- Edges Filters -->
             <div class="accordion-item">
                 <h2 class="accordion-header" id="headingEdges">
                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
@@ -183,6 +182,7 @@
                     </div>
                 </div>
             </div>
+            <!-- Components Filters -->
             <div class="accordion-item">
                 <h2 class="accordion-header" id="headingComponents">
                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
@@ -200,7 +200,6 @@
                 </div>
             </div>
         </div>
-
         <!-- Action Buttons -->
         <div class="row mb-4 g-2">
             <div class="col-auto">
@@ -222,7 +221,6 @@
                 </div>
             </div>
         </div>
-
         <!-- File Downloads Section -->
         <div class="card mb-4">
             <div class="card-body">
@@ -242,7 +240,6 @@
                         Component Edges TSV</button>
                     <button type="button" id="downloadFullNodesBed" class="btn btn-outline-primary btn-sm">Download Full
                         Component Nodes BED</button>
-                    <!-- New buttons -->
                     <button type="button" id="downloadComponentsTsv" class="btn btn-outline-primary btn-sm">Download
                         Filtered Components TSV</button>
                     <button type="button" id="downloadComponentsZip" class="btn btn-outline-primary btn-sm">Download
@@ -250,10 +247,8 @@
                 </div>
             </div>
         </div>
-
         <!-- Stats -->
         <div id="statsBox" class="alert alert-info d-none mb-4" style="padding: 0.5rem;"></div>
-
         <!-- Data Tables -->
         <h6 class="mb-2">📍 Filtered Nodes</h6>
         <div class="table-responsive mb-4">
@@ -263,11 +258,9 @@
         <div class="table-responsive mb-4">
             <table id="componentsTable" class="table table-striped table-sm" style="width:100%"></table>
         </div>
-
-        <!-- Graph Container (Default view with overlay controls) -->
+        <!-- Graph Container -->
         <div id="graphContainer"></div>
     </div>
-
     <!-- Node Details Modal -->
     <div class="modal fade" id="nodeDetailsModal" tabindex="-1" aria-labelledby="nodeDetailsModalLabel"
         aria-hidden="true">
@@ -284,7 +277,6 @@
             </div>
         </div>
     </div>
-
     <!-- Fullscreen Graph Modal -->
     <div class="modal fade" id="graphFullscreenModal" tabindex="-1" aria-labelledby="graphFullscreenModalLabel"
         aria-hidden="true">
@@ -295,45 +287,31 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body" style="position: relative;">
-                    <!-- The createGraphInContainer function will add the controls overlay and graph here -->
                     <div id="graphFullscreen" style="height: calc(100vh - 120px);"></div>
                 </div>
             </div>
         </div>
     </div>
-
     <!-- Footer -->
     <footer>
         Developed by <a href="https://github.com/mr-eyes/" target="_blank">Mohamed Abuelanin</a> in <a
             href="https://www.dennislab.org/" target="_blank">Megan Dennis lab</a>
     </footer>
-
     <!-- JS Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/datatables.net/js/dataTables.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/datatables.net-bs5/js/dataTables.bootstrap5.min.js"></script>
-    <!-- Bootstrap Bundle for Modal -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vis-network/standalone/umd/vis-network.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-
     <!-- App Logic -->
     <script>
         document.addEventListener("DOMContentLoaded", () => {
-            // Global data arrays and column definitions.
-            let nodesData = [],
-                edgesData = [],
-                componentsData = [];
-            let geneList = [],
-                selectedGenes = [];
-            let nodesColumns = [],
-                edgesColumns = [],
-                componentsColumns = [];
-            let nodesColumnTypes = {},
-                edgesColumnTypes = {},
-                componentsColumnTypes = {};
+            let nodesData = [], edgesData = [], componentsData = [];
+            let geneList = [], selectedGenes = [];
+            let nodesColumns = [], edgesColumns = [], componentsColumns = [];
+            let nodesColumnTypes = {}, edgesColumnTypes = {}, componentsColumnTypes = {};
 
-            // Updated toBED: now outputs 4 columns with 4th column as "{chr}:{start}-{end}-{gene_name}"
             function toBED(nodes) {
                 return nodes.map(n => {
                     const [chr, rng] = n.id.split(":");
@@ -344,7 +322,6 @@
                 }).join("\n");
             }
 
-            // Helper: Download file
             function downloadFile(content, filename, mimeType) {
                 const blob = new Blob([content], { type: mimeType });
                 const a = document.createElement("a");
@@ -353,14 +330,12 @@
                 a.click();
             }
 
-            // Convert array of objects to TSV string.
             function toTSV(arr) {
                 if (arr.length === 0) return "";
                 const keys = Object.keys(arr[0]);
                 return [keys.join("\t")].concat(arr.map(obj => keys.map(k => obj[k]).join("\t"))).join("\n");
             }
 
-            // Load TSV files.
             function loadTSV(file, callback) {
                 fetch(file).then(r => r.text()).then(t => {
                     const [h, ...lines] = t.trim().split("\n");
@@ -374,7 +349,6 @@
                 });
             }
 
-            // Escape HTML in strings.
             function escapeHTML(str) {
                 if (!str) return '';
                 return str.replace(/\\/g, '\\\\')
@@ -382,12 +356,10 @@
                     .replace(/'/g, '&#39;');
             }
 
-            // Gene Tags: Use a separate container for tags and an input for new gene names.
             const geneTagsContainer = document.getElementById("geneTagsContainer");
             const geneInput = document.getElementById("geneInput");
 
             function updateGeneTags() {
-                // Clear container and rebuild tags, then append the input.
                 geneTagsContainer.innerHTML = "";
                 selectedGenes.forEach(g => {
                     const span = document.createElement("span");
@@ -413,9 +385,7 @@
                     e.preventDefault();
                     let gene = this.value.trim();
                     if (gene !== "") {
-                        if (!selectedGenes.includes(gene)) {
-                            selectedGenes.push(gene);
-                        }
+                        if (!selectedGenes.includes(gene)) selectedGenes.push(gene);
                         updateGeneTags();
                     }
                     this.value = "";
@@ -431,7 +401,6 @@
                 }
             });
 
-            // Autocomplete for gene names.
             function autocomplete(inputText) {
                 const match = inputText.toLowerCase();
                 const hits = geneList.filter(g => g.toLowerCase().includes(match) && g.length >= inputText.length).slice(0, 10);
@@ -440,9 +409,7 @@
                 document.querySelectorAll('.autocomplete-suggestion').forEach(el => {
                     el.onclick = () => {
                         const gene = el.textContent.trim();
-                        if (!selectedGenes.includes(gene)) {
-                            selectedGenes.push(gene);
-                        }
+                        if (!selectedGenes.includes(gene)) selectedGenes.push(gene);
                         updateGeneTags();
                         suggestionsBox.innerHTML = "";
                     };
@@ -455,7 +422,6 @@
                 updateGeneTags();
             });
 
-            // Generic function to add a dynamic filter row into a container.
             function addDynamicFilterRow(container, columns, colTypes) {
                 const row = document.createElement("div");
                 row.className = "row dynamic-filter-row align-items-center";
@@ -465,9 +431,7 @@
               <option value="" disabled selected>Select column</option>
             </select>
           </div>
-          <div class="col-6 col-sm-6 col-md-5 filter-input-container">
-            <!-- Dynamic input will appear here -->
-          </div>
+          <div class="col-6 col-sm-6 col-md-5 filter-input-container"></div>
           <div class="col-2 col-sm-2 col-md-2 text-end">
             <button type="button" class="btn btn-danger btn-sm remove-filter">X</button>
           </div>
@@ -481,7 +445,6 @@
                 container.appendChild(row);
             }
 
-            // Helper: get data array based on container (nodes, edges, or components)
             function getDataByType(container) {
                 if (container.id === "nodesFiltersContainer") return nodesData;
                 if (container.id === "edgesFiltersContainer") return edgesData;
@@ -489,7 +452,6 @@
                 return [];
             }
 
-            // Update dynamic filter input based on column type.
             function updateFilterInputRow(filterRow, column, colTypes, data) {
                 const container = filterRow.querySelector(".filter-input-container");
                 const colType = colTypes[column];
@@ -529,7 +491,6 @@
                 }
             }
 
-            // Get filters from a given container.
             function getFiltersFromContainer(container, colTypes) {
                 const filters = [];
                 container.querySelectorAll(".dynamic-filter-row").forEach(row => {
@@ -554,12 +515,10 @@
                 return filters;
             }
 
-            // Check if container has any filters.
             function containerHasFilters(container) {
                 return container.querySelectorAll(".dynamic-filter-row").length > 0;
             }
 
-            // Build share state from gene selection and all dynamic filters.
             function getShareState() {
                 const state = {};
                 state.genes = selectedGenes;
@@ -570,7 +529,6 @@
                 return state;
             }
 
-            // Update URL with compressed share state and copy to clipboard.
             function shareResults() {
                 const state = getShareState();
                 const stateStr = LZString.compressToEncodedURIComponent(JSON.stringify(state));
@@ -583,7 +541,6 @@
                 }).catch(err => { console.error("Could not copy link: ", err); });
             }
 
-            // Restore share state from URL if present.
             function loadShareState() {
                 const params = new URLSearchParams(window.location.search);
                 if (params.has("shareState")) {
@@ -687,11 +644,9 @@
                                 }
                             });
                         }
-                        // Restore removal checkbox state.
                         if (state.hasOwnProperty("removeIsolated")) {
                             document.getElementById("removeIsolatedNodes").checked = state.removeIsolated;
                         }
-                        // After loading the share state, auto apply filters and visualize.
                         setTimeout(() => {
                             const results = applyFiltersAll();
                             if (results.finalNodes.length > 1000) {
@@ -706,12 +661,9 @@
                 }
             }
 
-            // Generic function to apply filters on data given a container and column types.
             function applyFiltersOnData(data, container, colTypes, extraFilterFn) {
                 let filtered = data;
-                if (extraFilterFn) {
-                    filtered = filtered.filter(extraFilterFn);
-                }
+                if (extraFilterFn) filtered = filtered.filter(extraFilterFn);
                 if (containerHasFilters(container)) {
                     const filters = getFiltersFromContainer(container, colTypes);
                     filters.forEach(filter => {
@@ -737,20 +689,15 @@
                 return filtered;
             }
 
-            // Apply all filters and update views.
             function applyFiltersAll() {
-                // Step 1: Apply node dynamic filters (ignoring gene query)
                 let allowedNodes = applyFiltersOnData(nodesData, document.getElementById("nodesFiltersContainer"), nodesColumnTypes);
                 const allowedIds = new Set(allowedNodes.map(n => n.id));
-                // Apply edge filters on edges among allowed nodes.
                 let allowedEdges = applyFiltersOnData(edgesData, document.getElementById("edgesFiltersContainer"), edgesColumnTypes)
                     .filter(e => allowedIds.has(e.source) && allowedIds.has(e.target));
-                // If gene query exists, select allowed nodes that match gene query and then compute connected components.
                 let finalNodeIds = new Set();
                 if (selectedGenes.length > 0) {
                     const geneMatched = allowedNodes.filter(n => selectedGenes.some(q => n.gene_name.toLowerCase().includes(q.toLowerCase())));
                     const geneMatchedIds = new Set(geneMatched.map(n => n.id));
-                    // Build induced graph (adjacency list) on allowed nodes using allowedEdges.
                     const adj = {};
                     allowedNodes.forEach(n => { adj[n.id] = []; });
                     allowedEdges.forEach(e => {
@@ -762,9 +709,7 @@
                         visited.add(nodeId);
                         component.push(nodeId);
                         (adj[nodeId] || []).forEach(neighbor => {
-                            if (!visited.has(neighbor)) {
-                                dfs(neighbor, component);
-                            }
+                            if (!visited.has(neighbor)) dfs(neighbor, component);
                         });
                     }
                     const components = [];
@@ -775,7 +720,6 @@
                             components.push(comp);
                         }
                     });
-                    // Keep entire components that contain at least one gene-matched node.
                     components.forEach(comp => {
                         if (comp.some(id => geneMatchedIds.has(id))) {
                             comp.forEach(id => finalNodeIds.add(id));
@@ -784,9 +728,7 @@
                 } else {
                     allowedNodes.forEach(n => finalNodeIds.add(n.id));
                 }
-                // Further restrict by component filters if any.
                 const filteredComponents = applyFiltersOnData(componentsData, document.getElementById("componentsFiltersContainer"), componentsColumnTypes);
-                // Update each component: keep only node_ids present in finalNodeIds.
                 let finalComponents = filteredComponents.map(comp => {
                     let new_ids = comp.node_ids.split(";").filter(id => finalNodeIds.has(id));
                     let newComp = Object.assign({}, comp);
@@ -795,8 +737,6 @@
                 }).filter(comp => comp.node_ids.trim() !== "");
                 let finalNodes = nodesData.filter(n => finalNodeIds.has(n.id));
                 let finalEdges = allowedEdges.filter(e => finalNodeIds.has(e.source) && finalNodeIds.has(e.target));
-
-                // Option: Remove isolated nodes (not connected to any edge).
                 if (document.getElementById("removeIsolatedNodes").checked) {
                     const connectedIds = new Set();
                     finalEdges.forEach(e => {
@@ -805,7 +745,6 @@
                     });
                     finalNodes = finalNodes.filter(n => connectedIds.has(n.id));
                     finalEdges = finalEdges.filter(e => connectedIds.has(e.source) && connectedIds.has(e.target));
-                    // Also update finalComponents to only include nodes that are still present.
                     finalComponents = finalComponents.map(comp => {
                         let new_ids = comp.node_ids.split(";").filter(id => finalNodes.some(n => n.id === id));
                         let newComp = Object.assign({}, comp);
@@ -813,28 +752,22 @@
                         return newComp;
                     }).filter(comp => comp.node_ids.trim() !== "");
                 }
-
-                // Update DataTables.
                 $('#nodesTable').DataTable().clear().rows.add(finalNodes).draw();
                 $('#componentsTable').DataTable().clear().rows.add(finalComponents).draw();
-
-                // Compute unique genes.
                 const uniqueGenes = new Set(finalNodes.map(n => n.gene_name).filter(g => g && g.toLowerCase() !== "unknown"));
-
                 const statsBox = document.getElementById("statsBox");
                 statsBox.classList.remove("d-none");
                 statsBox.innerHTML = `${finalNodes.length} nodes, ${finalEdges.length} edges, ${finalComponents.length} component(s), ${uniqueGenes.size} unique gene(s).`;
-
                 return { finalNodes, finalEdges, finalComponents };
             }
 
-            // Function to create the graph (with controls overlay) in a specified container.
+            // Create graph in container with visualization mode toggle.
             function createGraphInContainer(containerId, nodes, edges) {
                 const container = document.getElementById(containerId);
-                container.innerHTML = ""; // clear previous content
+                container.innerHTML = "";
                 container.style.position = "relative";
 
-                // Create control overlay.
+                // Control overlay with visualization mode dropdown.
                 const controlPanel = document.createElement("div");
                 controlPanel.style.position = "absolute";
                 controlPanel.style.top = "10px";
@@ -844,39 +777,124 @@
                 controlPanel.style.padding = "10px";
                 controlPanel.style.borderRadius = "4px";
                 controlPanel.innerHTML = `
+          <select id="${containerId}_visualizationMode" class="form-select form-select-sm mb-2">
+            <option value="regions" selected>By Regions</option>
+            <option value="genes">By Genes</option>
+          </select>
           <input type="text" id="${containerId}_search" class="form-control form-control-sm mb-2" placeholder="Search nodes by gene">
+          <button type="button" id="${containerId}_searchButton" class="btn btn-primary btn-sm mb-2">Search</button>
           <select id="${containerId}_layoutSelect" class="form-select form-select-sm mb-2">
             <option value="force">Force Directed</option>
             <option value="hierarchical">Hierarchical</option>
+            <option value="circular">Circular</option>
           </select>
+          <div class="mb-2">
+            <label for="${containerId}_nodeSize" class="form-label mb-0" style="font-size: 0.8rem;">Node Size Multiplier</label>
+            <input type="number" id="${containerId}_nodeSize" class="form-control form-control-sm" value="1" step="0.1" min="0.1">
+          </div>
+          <div class="mb-2">
+            <label for="${containerId}_labelSize" class="form-label mb-0" style="font-size: 0.8rem;">Label Size</label>
+            <input type="number" id="${containerId}_labelSize" class="form-control form-control-sm" value="14" step="1" min="8">
+          </div>
+          <div class="mb-2">
+            <label for="${containerId}_edgeWeightSelect" class="form-label mb-0" style="font-size: 0.8rem;">Edge Weight Attribute</label>
+            <select id="${containerId}_edgeWeightSelect" class="form-select form-select-sm">
+              <option value="">None</option>
+            </select>
+          </div>
           <button type="button" id="${containerId}_clearSelection" class="btn btn-secondary btn-sm mb-2">Clear Selection</button>
           ${containerId === "graphContainer" ? '<button type="button" id="openFullscreen" class="btn btn-primary btn-sm mb-2">Fullscreen</button>' : '<button type="button" id="' + containerId + '_toggleFullscreen" class="btn btn-primary btn-sm mb-2">Minimize</button>'}
         `;
                 container.appendChild(controlPanel);
 
-                // Create div to hold the graph.
+                // Populate edge weight selector.
+                let edgeWeightSelect = document.getElementById(containerId + "_edgeWeightSelect");
+                if (edgesColumns && edgesColumns.length > 0) {
+                    let options = "";
+                    edgesColumns.filter(col => !["source", "target", "node", "node_name"].includes(col.toLowerCase())).forEach(col => {
+                        options += `<option value="${col}">${col}</option>`;
+                    });
+                    edgeWeightSelect.innerHTML += options;
+                }
+
+                // Create graph div.
                 const graphDiv = document.createElement("div");
                 graphDiv.id = containerId + "_graph";
                 graphDiv.style.height = "100%";
                 container.appendChild(graphDiv);
 
-                // Build graph data.
-                const graphNodes = nodes.map(n => {
-                    const label = n.gene_name && n.gene_name !== "unknown" ? `${n.gene_name} (${n.id})` : n.id;
-                    return { id: n.id, label: label, title: `Gene: ${n.gene_name}\nID: ${n.id}`, originalColor: undefined };
-                });
-                const graphEdges = edges.map(e => ({
-                    from: e.source,
-                    to: e.target,
-                    title: Object.entries(e).map(([k, v]) => `${k}: ${v}`).join("\n")
-                }));
+                // Function to compute graph data based on visualization mode.
+                function computeGraphData() {
+                    const visMode = document.getElementById(containerId + "_visualizationMode").value;
+                    let graphNodes, graphEdges;
+                    if (visMode === "genes") {
+                        // For "By Genes" mode, remove region info and merge nodes.
+                        let regionToGene = {};
+                        nodes.forEach(n => { regionToGene[n.id] = n.gene_name ? n.gene_name : n.id; });
+                        let geneGroups = {};
+                        nodes.forEach(n => {
+                            let gene = n.gene_name ? n.gene_name : n.id;
+                            if (!geneGroups[gene]) geneGroups[gene] = [];
+                            geneGroups[gene].push(n);
+                        });
+                        graphNodes = Object.keys(geneGroups).map(gene => ({
+                            id: gene,
+                            label: gene,
+                            title: `Gene: ${gene} (${geneGroups[gene].length} regions)`,
+                            gene: gene.toLowerCase(),
+                            size: 10,
+                            originalColor: {}
+                        }));
+                        // Build merged edges between genes.
+                        let edgeMap = {};
+                        edges.forEach(e => {
+                            let geneA = regionToGene[e.source];
+                            let geneB = regionToGene[e.target];
+                            if (!geneA || !geneB || geneA === geneB) return;
+                            let key = geneA < geneB ? geneA + "|" + geneB : geneB + "|" + geneA;
+                            if (!edgeMap[key]) {
+                                edgeMap[key] = { from: geneA, to: geneB, count: 0 };
+                            }
+                            edgeMap[key].count++;
+                        });
+                        graphEdges = Object.values(edgeMap).map(e => ({
+                            from: e.from,
+                            to: e.to,
+                            title: `Edge between ${e.from} and ${e.to} (${e.count} connections)`,
+                            width: 2
+                        }));
+                    } else {
+                        // "By Regions" mode: default.
+                        graphNodes = nodes.map(n => {
+                            const label = n.gene_name && n.gene_name !== "unknown" ? `${n.gene_name} (${n.id})` : n.id;
+                            return {
+                                id: n.id,
+                                label: label,
+                                title: `Gene: ${n.gene_name}\nID: ${n.id}`,
+                                gene: n.gene_name ? n.gene_name.toLowerCase() : n.id.toLowerCase(),
+                                size: 10,
+                                originalColor: {}
+                            };
+                        });
+                        graphEdges = edges.map((e, i) => ({
+                            id: i,
+                            from: e.source,
+                            to: e.target,
+                            title: Object.entries(e).map(([k, v]) => `${k}: ${v}`).join("\n"),
+                            width: 2
+                        }));
+                    }
+                    return { graphNodes, graphEdges };
+                }
+
+                // Compute initial graph data.
+                let { graphNodes, graphEdges } = computeGraphData();
 
                 const data = {
                     nodes: new vis.DataSet(graphNodes),
                     edges: new vis.DataSet(graphEdges)
                 };
 
-                // Default network options.
                 let options = {
                     physics: {
                         stabilization: true,
@@ -894,37 +912,45 @@
                         size: 10,
                         font: { size: 14, color: '#343a40' }
                     },
-                    edges: {
-                        width: 2
-                    }
+                    edges: { width: 2 }
                 };
 
                 let network = new vis.Network(graphDiv, data, options);
 
-                // Save original colors for each node.
-                data.nodes.forEach(node => {
-                    data.nodes.update({ id: node.id, originalColor: node.color });
+                // Save original colors.
+                data.nodes.get().forEach(node => {
+                    data.nodes.update({ id: node.id, originalColor: node.color || {} });
                 });
 
-                // Search functionality.
-                document.getElementById(containerId + "_search").addEventListener("input", function () {
-                    const searchTerm = this.value.trim().toLowerCase();
-                    data.nodes.forEach(function (node) {
-                        let originalColor = node.originalColor || undefined;
-                        if (searchTerm !== "" && node.label.toLowerCase().includes(searchTerm)) {
+                // When visualization mode changes, update the graph immediately.
+                document.getElementById(containerId + "_visualizationMode").addEventListener("change", function () {
+                    const { graphNodes: newNodes, graphEdges: newEdges } = computeGraphData();
+                    data.nodes.clear();
+                    data.nodes.add(newNodes);
+                    data.edges.clear();
+                    data.edges.add(newEdges);
+                });
+
+                // Search functionality triggered by button.
+                document.getElementById(containerId + "_searchButton").addEventListener("click", function () {
+                    const searchTerm = document.getElementById(containerId + "_search").value.trim().toLowerCase();
+                    data.nodes.get().forEach(function (node) {
+                        let orig = node.originalColor || {};
+                        if (searchTerm !== "" &&
+                            (node.gene.includes(searchTerm) || searchTerm.includes(node.gene)) &&
+                            (node.gene.length >= searchTerm.length || node.gene.length === searchTerm.length - 1)) {
                             data.nodes.update({ id: node.id, color: { background: 'yellow' } });
                         } else {
-                            data.nodes.update({ id: node.id, color: originalColor });
+                            data.nodes.update({ id: node.id, color: orig });
                         }
                     });
                 });
 
-                // Clear selection button.
+                // Clear selection resets colors.
                 document.getElementById(containerId + "_clearSelection").addEventListener("click", function () {
                     document.getElementById(containerId + "_search").value = "";
-                    data.nodes.forEach(function (node) {
-                        let originalColor = node.originalColor || undefined;
-                        data.nodes.update({ id: node.id, color: originalColor });
+                    data.nodes.get().forEach(function (node) {
+                        data.nodes.update({ id: node.id, color: node.originalColor || {} });
                     });
                     network.unselectAll();
                 });
@@ -934,17 +960,83 @@
                     const layoutType = this.value;
                     if (layoutType === "hierarchical") {
                         network.setOptions({ layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed' } } });
+                    } else if (layoutType === "circular") {
+                        network.setOptions({ physics: false });
+                        const containerRect = graphDiv.getBoundingClientRect();
+                        const centerX = containerRect.width / 2;
+                        const centerY = containerRect.height / 2;
+                        const radius = Math.min(containerRect.width, containerRect.height) / 3;
+                        const nodesArray = data.nodes.get();
+                        nodesArray.forEach((node, index) => {
+                            const angle = 2 * Math.PI * index / nodesArray.length;
+                            const x = centerX + radius * Math.cos(angle);
+                            const y = centerY + radius * Math.sin(angle);
+                            data.nodes.update({ id: node.id, x: x, y: y, fixed: { x: true, y: true } });
+                        });
                     } else {
                         network.setOptions({ layout: { hierarchical: false } });
+                        network.setOptions({ physics: { stabilization: true } });
+                        data.nodes.get().forEach(node => {
+                            data.nodes.update({ id: node.id, fixed: false });
+                        });
                     }
                 });
 
-                // Fullscreen / Minimize button.
+                // Node size control.
+                document.getElementById(containerId + "_nodeSize").addEventListener("change", function () {
+                    const multiplier = parseFloat(this.value) || 1;
+                    data.nodes.get().forEach(node => {
+                        data.nodes.update({ id: node.id, size: 10 * multiplier });
+                    });
+                });
+
+                // Add label size control
+                document.getElementById(containerId + "_labelSize").addEventListener("change", function () {
+                    const fontSize = parseInt(this.value) || 14;
+                    network.setOptions({
+                        nodes: {
+                            font: { size: fontSize }
+                        }
+                    });
+                });
+
+                // Edge weight control.
+                document.getElementById(containerId + "_edgeWeightSelect").addEventListener("change", function () {
+                    const attr = this.value;
+                    if (attr === "") {
+                        data.edges.get().forEach(edge => {
+                            data.edges.update({ id: edge.id, width: 2 });
+                        });
+                    } else {
+                        let values = [];
+                        data.edges.get().forEach(edge => {
+                            let edgeData = edges.find(e => e.source === edge.from && e.target === edge.to);
+                            if (edgeData) {
+                                let val = parseFloat(edgeData[attr]);
+                                if (!isNaN(val)) values.push(val);
+                            }
+                        });
+                        if (values.length > 0) {
+                            const minVal = Math.min(...values);
+                            const maxVal = Math.max(...values);
+                            const minWidth = 1, maxWidth = 5;
+                            data.edges.get().forEach(edge => {
+                                let edgeData = edges.find(e => e.source === edge.from && e.target === edge.to);
+                                if (edgeData) {
+                                    let val = parseFloat(edgeData[attr]);
+                                    let normalized = minVal === maxVal ? (minWidth + maxWidth) / 2 : minWidth + ((val - minVal) / (maxVal - minVal)) * (maxWidth - minWidth);
+                                    data.edges.update({ id: edge.id, width: normalized });
+                                }
+                            });
+                        }
+                    }
+                });
+
+                // Fullscreen / Minimize.
                 if (containerId === "graphContainer") {
                     document.getElementById("openFullscreen").addEventListener("click", function () {
                         const modal = new bootstrap.Modal(document.getElementById('graphFullscreenModal'));
                         modal.show();
-                        // After modal is shown, create the full-screen graph.
                         setTimeout(() => {
                             createGraphInContainer("graphFullscreen", nodes, edges);
                         }, 300);
@@ -957,11 +1049,10 @@
                     });
                 }
 
-                // Node click event to show details.
                 network.on("click", function (params) {
                     if (params.nodes.length > 0) {
                         let nodeId = params.nodes[0];
-                        let nodeData = nodes.find(n => n.id === nodeId);
+                        let nodeData = nodes.find(n => n.id === nodeId) || graphNodes.find(n => n.id === nodeId);
                         if (nodeData) {
                             document.getElementById("nodeDetailsContent").innerHTML = `<pre>${JSON.stringify(nodeData, null, 2)}</pre>`;
                             var modal = new bootstrap.Modal(document.getElementById('nodeDetailsModal'));
@@ -969,11 +1060,9 @@
                         }
                     }
                 });
-
                 return network;
             }
 
-            // Enhanced interactive graph visualization.
             function showGraph(nodes, edges) {
                 if (nodes.length > 1000) {
                     alert("Visualization aborted: More than 1000 nodes to display.");
@@ -984,14 +1073,12 @@
                 createGraphInContainer("graphContainer", nodes, edges);
             }
 
-            // Download ZIP with all filtered files.
+            // (Download and share functions remain unchanged below this point...)
             function downloadZip(finalNodes, finalEdges) {
                 const zip = new JSZip();
                 zip.file("filtered_nodes.tsv", toTSV(finalNodes));
                 zip.file("filtered_edges.tsv", toTSV(finalEdges));
                 zip.file("filtered_nodes.bed", toBED(finalNodes));
-
-                // Compute full connected components on the final filtered set.
                 const finalIds = new Set(finalNodes.map(n => n.id));
                 const adj = {};
                 finalNodes.forEach(n => { adj[n.id] = []; });
@@ -1012,25 +1099,21 @@
                 const fullComponentEdges = finalEdges.filter(e => fullComponentIds.has(e.source) && fullComponentIds.has(e.target));
                 zip.file("filtered_edges_full_component.tsv", toTSV(fullComponentEdges));
                 zip.file("filtered_nodes_full_component.bed", toBED(fullComponentNodes));
-
                 zip.generateAsync({ type: "blob" }).then(file => {
                     const prefix = document.getElementById("filePrefix").value || "";
                     downloadFile(file, prefix + "filtered_data.zip", "application/zip");
                 });
             }
 
-            // Download individual files.
             function downloadIndividualFile(filename, content) {
                 const prefix = document.getElementById("filePrefix").value || "";
                 downloadFile(content, prefix + filename, "text/plain");
             }
 
-            // New: Download filtered components as TSV.
             function downloadComponentsTSV(finalComponents) {
                 downloadIndividualFile("filtered_components.tsv", toTSV(finalComponents));
             }
 
-            // New: Download separate components ZIP (each component as a separate BED file).
             function downloadComponentsZip(finalComponents, finalNodes) {
                 const zip = new JSZip();
                 finalComponents.forEach(comp => {
@@ -1044,7 +1127,6 @@
                 });
             }
 
-            // Set up event listeners for downloads.
             document.getElementById("downloadZip").addEventListener("click", () => {
                 const { finalNodes, finalEdges, finalComponents } = applyFiltersAll();
                 downloadZip(finalNodes, finalEdges);
@@ -1123,7 +1205,6 @@
                 showGraph(finalNodes, finalEdges);
             };
 
-            // Set up Add Filter buttons for each filter container.
             document.getElementById("addNodeFilter").addEventListener("click", () => {
                 addDynamicFilterRow(document.getElementById("nodesFiltersContainer"), nodesColumns, nodesColumnTypes);
             });
@@ -1134,11 +1215,9 @@
                 addDynamicFilterRow(document.getElementById("componentsFiltersContainer"), componentsColumns, componentsColumnTypes);
             });
 
-            // Initialize DataTables.
             $('#nodesTable').DataTable({ data: [], columns: [] });
             $('#componentsTable').DataTable({ data: [], columns: [] });
 
-            // Load TSV Data and restore share state.
             loadTSV("nodes_metadata.tsv", (data, cols) => {
                 nodesData = data;
                 nodesColumns = cols;
@@ -1158,7 +1237,6 @@
                     const firstVal = data[0][col];
                     edgesColumnTypes[col] = (!isNaN(parseFloat(firstVal)) && isFinite(firstVal)) ? "number" : "categorical";
                 });
-                // Edges table view removed – used only for filtering and graph.
             });
             loadTSV("connected_components_summary.tsv", (data, cols) => {
                 componentsData = data;
