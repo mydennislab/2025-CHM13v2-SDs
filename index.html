@@ -313,7 +313,7 @@
                     const [chr, rng] = n.id.split(":");
                     const [s, e] = rng.split("-");
                     const gene = n.gene_name || "unknown";
-                    const name = `${chr}:${s}-${e}-${gene}`;
+                    const name = `${chr}:${s}-${e}_${gene}`;
                     return `${chr}\t${s}\t${e}\t${name}`;
                 }).join("\n");
             }
