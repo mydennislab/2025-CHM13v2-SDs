@@ -147,6 +147,31 @@
             <div id="suggestions" class="autocomplete-suggestions"></div>
             <button type="button" id="loadExample" class="btn btn-info btn-sm mt-2">Load Example Genes</button>
         </div>
+
+        <!-- Region Search Section -->
+        <div class="mb-4">
+            <label class="form-label">Search by genomic regions:</label>
+            <div class="input-group mb-2">
+                <input type="text" id="regionInput" class="form-control" placeholder="e.g., chr1:1000-2000 or chr2:3000-4000">
+                <button class="btn btn-primary" type="button" id="addRegionButton">Add Region</button>
+            </div>
+            <div id="regionTagsContainer" class="d-flex flex-wrap gap-1 border p-2 rounded mb-2" style="min-height: 40px;"></div>
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="enableRegionOverlapSearch" checked>
+                <label class="form-check-label" for="enableRegionOverlapSearch">
+                    Find overlapping regions (uncheck to find exact matches)
+                </label>
+            </div>
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="includeParalogRegions">
+                <label class="form-check-label" for="includeParalogRegions">
+                    Include paralog regions (find any region connected to matching regions)
+                </label>
+                <i class="bi bi-info-circle ms-1" data-bs-toggle="tooltip" title="Identifies and includes paralogous duplications of the specified regions"></i>
+            </div>
+            <button type="button" id="clearRegionSearch" class="btn btn-outline-secondary btn-sm">Clear Regions</button>
+        </div>
+
         <!-- Dynamic Filters Accordion -->
         <div class="accordion mb-4" id="filterAccordion">
             <!-- Nodes Filters -->
@@ -318,6 +343,7 @@
         document.addEventListener("DOMContentLoaded", () => {
             let nodesData = [], edgesData = [], componentsData = [];
             let geneList = [], selectedGenes = [];
+            let selectedRegions = [];  // Array to store selected regions
             let nodesColumns = [], edgesColumns = [], componentsColumns = [];
             let nodesColumnTypes = {}, edgesColumnTypes = {}, componentsColumnTypes = {};
 
@@ -532,9 +558,104 @@
                 return container.querySelectorAll(".dynamic-filter-row").length > 0;
             }
 
+            // Function to parse region string into object with chr, start, end
+            function parseRegion(regionStr) {
+                try {
+                    const match = regionStr.match(/^(chr\w+):(\d+)-(\d+)$/);
+                    if (!match) return null;
+                    
+                    return {
+                        chr: match[1],
+                        start: parseInt(match[2]),
+                        end: parseInt(match[3]),
+                        original: regionStr
+                    };
+                } catch (e) {
+                    console.error("Error parsing region:", regionStr, e);
+                    return null;
+                }
+            }
+
+            // Function to check if two regions overlap
+            function regionsOverlap(region1, region2) {
+                return region1.chr === region2.chr && 
+                      region1.start <= region2.end && 
+                      region2.start <= region1.end;
+            }
+            
+            // Function to handle region input
+            function addRegion(regionStr) {
+                const region = parseRegion(regionStr);
+                if (!region) {
+                    alert("Invalid region format. Please use format 'chr:start-end' (e.g., chr1:1000-2000)");
+                    return false;
+                }
+                
+                // Check if region already exists
+                if (selectedRegions.some(r => r.original === region.original)) {
+                    return false;
+                }
+                
+                selectedRegions.push(region);
+                updateRegionTags();
+                return true;
+            }
+            
+            // Function to update region tags display
+            function updateRegionTags() {
+                const container = document.getElementById("regionTagsContainer");
+                container.innerHTML = "";
+                
+                selectedRegions.forEach(region => {
+                    const tag = document.createElement("div");
+                    tag.className = "badge bg-secondary me-1 mb-1 d-flex align-items-center";
+                    tag.innerHTML = `
+                        <span>${region.original}</span>
+                        <button type="button" class="btn-close btn-close-white ms-1" 
+                                aria-label="Remove" style="font-size: 0.5rem;"></button>
+                    `;
+                    
+                    tag.querySelector('.btn-close').addEventListener('click', () => {
+                        selectedRegions = selectedRegions.filter(r => r.original !== region.original);
+                        updateRegionTags();
+                    });
+                    
+                    container.appendChild(tag);
+                });
+            }
+
+            // Add event listener for the region input
+            document.getElementById("addRegionButton").addEventListener("click", () => {
+                const regionInput = document.getElementById("regionInput");
+                const regionStr = regionInput.value.trim();
+                
+                if (regionStr) {
+                    if (addRegion(regionStr)) {
+                        regionInput.value = ""; // Clear input field
+                    }
+                }
+            });
+            
+            // Allow Enter key to add a region
+            document.getElementById("regionInput").addEventListener("keydown", (e) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    document.getElementById("addRegionButton").click();
+                }
+            });
+            
+            // Clear all regions
+            document.getElementById("clearRegionSearch").addEventListener("click", () => {
+                selectedRegions = [];
+                updateRegionTags();
+            });
+
             function getShareState() {
                 const state = {};
                 state.genes = selectedGenes;
+                state.regions = selectedRegions;
+                state.enableRegionOverlapSearch = document.getElementById("enableRegionOverlapSearch").checked;
+                state.includeParalogRegions = document.getElementById("includeParalogRegions").checked;
                 state.nodeFilters = getFiltersFromContainer(document.getElementById("nodesFiltersContainer"), nodesColumnTypes);
                 state.edgeFilters = getFiltersFromContainer(document.getElementById("edgesFiltersContainer"), edgesColumnTypes);
                 state.componentFilters = getFiltersFromContainer(document.getElementById("componentsFiltersContainer"), componentsColumnTypes);
@@ -560,10 +681,30 @@
                     try {
                         const compressedState = params.get("shareState");
                         const state = JSON.parse(LZString.decompressFromEncodedURIComponent(compressedState));
+                        
+                        // Load genes
                         if (state.genes) {
                             selectedGenes = state.genes;
                             updateGeneTags();
                         }
+                        
+                        // Load regions
+                        if (state.regions) {
+                            selectedRegions = state.regions;
+                            updateRegionTags();
+                        }
+                        
+                        // Load region search mode
+                        if (state.hasOwnProperty("enableRegionOverlapSearch")) {
+                            document.getElementById("enableRegionOverlapSearch").checked = state.enableRegionOverlapSearch;
+                        }
+                        
+                        // Load paralog search option
+                        if (state.hasOwnProperty("includeParalogRegions")) {
+                            document.getElementById("includeParalogRegions").checked = state.includeParalogRegions;
+                        }
+                        
+                        // Load filters
                         if (state.nodeFilters) {
                             state.nodeFilters.forEach(filter => {
                                 addDynamicFilterRow(document.getElementById("nodesFiltersContainer"), nodesColumns, nodesColumnTypes);
@@ -704,11 +845,77 @@
             }
 
             function applyFiltersAll() {
+                // Start with node filters from filter panel
                 let allowedNodes = applyFiltersOnData(nodesData, document.getElementById("nodesFiltersContainer"), nodesColumnTypes);
+                
+                // Apply region filters if any regions are selected
+                if (selectedRegions.length > 0) {
+                    const useOverlapSearch = document.getElementById("enableRegionOverlapSearch").checked;
+                    const includeParalogs = document.getElementById("includeParalogRegions").checked;
+                    
+                    // First pass: find nodes that directly match the region criteria
+                    const directMatchNodeIds = new Set();
+                    
+                    allowedNodes = allowedNodes.filter(node => {
+                        // Parse node's region
+                        const nodeRegion = parseRegion(node.id);
+                        if (!nodeRegion) return false;
+                        
+                        // Check if the node's region matches any of the selected regions
+                        const isMatch = selectedRegions.some(selectedRegion => {
+                            if (useOverlapSearch) {
+                                // Check for overlap
+                                return regionsOverlap(nodeRegion, selectedRegion);
+                            } else {
+                                // Check for exact match
+                                return nodeRegion.chr === selectedRegion.chr && 
+                                       nodeRegion.start === selectedRegion.start && 
+                                       nodeRegion.end === selectedRegion.end;
+                            }
+                        });
+                        
+                        // If it's a match, add to direct matches
+                        if (isMatch) {
+                            directMatchNodeIds.add(node.id);
+                        }
+                        
+                        return isMatch;
+                    });
+                    
+                    // If paralog search is enabled, do a second pass to include connected regions
+                    if (includeParalogs && directMatchNodeIds.size > 0) {
+                        // Build adjacency list from edges
+                        const adjacencyList = {};
+                        nodesData.forEach(n => { adjacencyList[n.id] = []; });
+                        edgesData.forEach(e => {
+                            if (adjacencyList[e.source]) adjacencyList[e.source].push(e.target);
+                            if (adjacencyList[e.target]) adjacencyList[e.target].push(e.source);
+                        });
+                        
+                        // Find all nodes directly connected to direct matches
+                        const paralogNodeIds = new Set([...directMatchNodeIds]);
+                        
+                        directMatchNodeIds.forEach(nodeId => {
+                            // Add all direct neighbors (paralogs)
+                            if (adjacencyList[nodeId]) {
+                                adjacencyList[nodeId].forEach(neighbor => {
+                                    paralogNodeIds.add(neighbor);
+                                });
+                            }
+                        });
+                        
+                        // Include paralog nodes
+                        allowedNodes = nodesData.filter(n => paralogNodeIds.has(n.id));
+                    }
+                }
+                
                 const allowedIds = new Set(allowedNodes.map(n => n.id));
                 let allowedEdges = applyFiltersOnData(edgesData, document.getElementById("edgesFiltersContainer"), edgesColumnTypes)
                     .filter(e => allowedIds.has(e.source) && allowedIds.has(e.target));
+                
                 let finalNodeIds = new Set();
+                
+                // Apply gene filters if any genes are selected
                 if (selectedGenes.length > 0) {
                     const geneMatched = allowedNodes.filter(n => selectedGenes.some(q => n.gene_name.toLowerCase().includes(q.toLowerCase())));
                     const geneMatchedIds = new Set(geneMatched.map(n => n.id));
