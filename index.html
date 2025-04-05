@@ -795,6 +795,15 @@
             <option value="regions" selected>By Regions</option>
             <option value="genes">By Genes</option>
           </select>
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" id="modal_useActualOverlaps">
+            <label class="form-check-label" for="modal_useActualOverlaps">
+              Use Actual BP Overlaps
+            </label>
+            <i class="bi bi-info-circle ms-1" 
+               data-bs-toggle="tooltip" 
+               title="Calculate and visualize actual base pair overlaps between regions"></i>
+          </div>
           <input type="text" id="modal_search" class="form-control form-control-sm mb-2" placeholder="Search nodes by gene">
           <button type="button" id="modal_searchButton" class="btn btn-primary btn-sm mb-2">Search</button>
           <select id="modal_layoutSelect" class="form-select form-select-sm mb-2">
@@ -849,10 +858,78 @@
                 const labelSizeRange = document.getElementById("modal_labelSize");
                 const labelSizeNumber = document.getElementById("modal_labelSizeNumber");
 
+                // Parse a region string like "chr1:1000-2000" into {chr, start, end}
+                function parseRegion(regionStr) {
+                    try {
+                        const [chr, range] = regionStr.split(':');
+                        const [start, end] = range.split('-').map(Number);
+                        return { chr, start, end };
+                    } catch (e) {
+                        console.error("Error parsing region:", regionStr, e);
+                        return null;
+                    }
+                }
+
+                // Calculate base pair overlap between two regions
+                function calculateOverlap(region1, region2) {
+                    // If regions are on different chromosomes, use length-based calculation
+                    if (region1.chr !== region2.chr) {
+                        // Calculate the absolute length of each region
+                        const length1 = region1.end - region1.start;
+                        const length2 = region2.end - region2.start;
+                        // The overlap is the minimum length of the two regions
+                        return Math.min(length1, length2);
+                    } else {
+                        // For regions on the same chromosome, calculate standard overlap
+                        const overlapStart = Math.max(region1.start, region2.start);
+                        const overlapEnd = Math.min(region1.end, region2.end);
+                        
+                        if (overlapStart <= overlapEnd) {
+                            // There is an actual overlap on the chromosome
+                            return overlapEnd - overlapStart;
+                        } else {
+                            // No overlap on the same chromosome - calculate common length
+                            const length1 = region1.end - region1.start;
+                            const length2 = region2.end - region2.start;
+                            return Math.min(length1, length2);
+                        }
+                    }
+                }
+
+                // Compute edge overlaps for all edges between regions
+                function computeRegionOverlaps(nodes, edges) {
+                    // Create a mapping of node IDs to parsed regions
+                    const regionMap = {};
+                    nodes.forEach(node => {
+                        regionMap[node.id] = parseRegion(node.id);
+                    });
+
+                    // Calculate actual overlaps for each edge
+                    return edges.map(edge => {
+                        const sourceRegion = regionMap[edge.source];
+                        const targetRegion = regionMap[edge.target];
+
+                        if (sourceRegion && targetRegion) {
+                            const bpOverlap = calculateOverlap(sourceRegion, targetRegion);
+                            return {
+                                ...edge,
+                                bp_overlap: bpOverlap
+                            };
+                        }
+
+                        return edge;
+                    });
+                }
+
+                // Calculate edges with overlap information once
+                const edgesWithOverlaps = computeRegionOverlaps(nodes, edges);
+
                 // Function to compute modal graph data.
                 function computeModalGraphData() {
                     const visMode = document.getElementById("modal_visualizationMode").value;
+                    const useActualOverlaps = document.getElementById("modal_useActualOverlaps").checked;
                     let graphNodes, graphEdges;
+
                     if (visMode === "genes") {
                         let regionToGene = {};
                         nodes.forEach(n => { regionToGene[n.id] = n.gene_name ? n.gene_name : n.id; });
@@ -870,22 +947,63 @@
                             size: parseInt(nodeSizeRange.value),
                             originalColor: {}
                         }));
+
+                        // For genes mode with actual overlaps
                         let edgeMap = {};
-                        edges.forEach(e => {
-                            let geneA = regionToGene[e.source];
-                            let geneB = regionToGene[e.target];
-                            if (!geneA || !geneB || geneA === geneB) return;
-                            let key = geneA < geneB ? geneA + "|" + geneB : geneB + "|" + geneA;
-                            if (!edgeMap[key]) { edgeMap[key] = { from: geneA, to: geneB, count: 0 }; }
-                            edgeMap[key].count++;
+                        if (useActualOverlaps) {
+                            // When using actual overlaps, sum the bp_overlap values
+                            edgesWithOverlaps.forEach(e => {
+                                let geneA = regionToGene[e.source];
+                                let geneB = regionToGene[e.target];
+                                if (!geneA || !geneB || geneA === geneB) return;
+
+                                let key = geneA < geneB ? `${geneA}|${geneB}` : `${geneB}|${geneA}`;
+                                if (!edgeMap[key]) {
+                                    edgeMap[key] = {
+                                        from: geneA,
+                                        to: geneB,
+                                        count: 0,
+                                        totalOverlap: 0
+                                    };
+                                }
+                                edgeMap[key].count++;
+                                edgeMap[key].totalOverlap += (e.bp_overlap || 0);
+                            });
+                        } else {
+                            // Original behavior - count connections
+                            edges.forEach(e => {
+                                let geneA = regionToGene[e.source];
+                                let geneB = regionToGene[e.target];
+                                if (!geneA || !geneB || geneA === geneB) return;
+
+                                let key = geneA < geneB ? `${geneA}|${geneB}` : `${geneB}|${geneA}`;
+                                if (!edgeMap[key]) {
+                                    edgeMap[key] = {
+                                        from: geneA,
+                                        to: geneB,
+                                        count: 0
+                                    };
+                                }
+                                edgeMap[key].count++;
+                            });
+                        }
+
+                        graphEdges = Object.values(edgeMap).map(e => {
+                            let title = `Edge between ${e.from} and ${e.to} (${e.count} connections)`;
+                            if (useActualOverlaps && e.totalOverlap) {
+                                title += `\nTotal overlap: ${e.totalOverlap.toLocaleString()} bp`;
+                            }
+                            return {
+                                from: e.from,
+                                to: e.to,
+                                title: title,
+                                width: 2,
+                                count: e.count,
+                                bp_overlap: e.totalOverlap || 0
+                            };
                         });
-                        graphEdges = Object.values(edgeMap).map(e => ({
-                            from: e.from,
-                            to: e.to,
-                            title: `Edge between ${e.from} and ${e.to} (${e.count} connections)`,
-                            width: 2
-                        }));
                     } else {
+                        // By Regions
                         graphNodes = nodes.map(n => {
                             const label = n.gene_name && n.gene_name !== "unknown" ? `${n.gene_name} (${n.id})` : n.id;
                             return {
@@ -897,13 +1015,38 @@
                                 originalColor: {}
                             };
                         });
-                        graphEdges = edges.map((e, i) => ({
-                            id: i,
-                            from: e.source,
-                            to: e.target,
-                            title: Object.entries(e).map(([k, v]) => `${k}: ${v}`).join("\n"),
-                            width: 2
-                        }));
+
+                        if (useActualOverlaps) {
+                            // Use pre-calculated overlaps for edges
+                            graphEdges = edgesWithOverlaps.map((e, i) => {
+                                let title = Object.entries(e)
+                                    .filter(([k]) => !["source", "target"].includes(k))
+                                    .map(([k, v]) => `${k}: ${v}`)
+                                    .join("\n");
+
+                                if (e.bp_overlap !== undefined) {
+                                    title += `\nActual overlap: ${e.bp_overlap.toLocaleString()} bp`;
+                                }
+
+                                return {
+                                    id: i,
+                                    from: e.source,
+                                    to: e.target,
+                                    title: title,
+                                    width: 2,
+                                    bp_overlap: e.bp_overlap || 0
+                                };
+                            });
+                        } else {
+                            // Original behavior
+                            graphEdges = edges.map((e, i) => ({
+                                id: i,
+                                from: e.source,
+                                to: e.target,
+                                title: Object.entries(e).map(([k, v]) => `${k}: ${v}`).join("\n"),
+                                width: 2
+                            }));
+                        }
                     }
                     return { graphNodes, graphEdges };
                 }
@@ -1025,33 +1168,110 @@
 
                 document.getElementById("modal_edgeWeightSelect").addEventListener("change", function () {
                     const attr = this.value;
+                    updateEdgeWeights(attr);
+                });
+
+                // Fix edge weight function
+                function updateEdgeWeights(attr) {
                     if (attr === "") {
                         modalNetworkData.edges.get().forEach(edge => {
                             modalNetworkData.edges.update({ id: edge.id, width: 2 });
                         });
-                    } else {
-                        let values = [];
-                        modalNetworkData.edges.get().forEach(edge => {
-                            let edgeData = edges.find(e => e.source === edge.from && e.target === edge.to);
-                            if (edgeData) {
+                        return;
+                    }
+
+                    // Collect values for scaling
+                    let values = [];
+                    modalNetworkData.edges.get().forEach(edge => {
+                        // Check if the attribute exists directly on the edge object first
+                        if (edge[attr] !== undefined) {
+                            let val = parseFloat(edge[attr]);
+                            if (!isNaN(val)) values.push(val);
+                        }
+                        // If not found in edge object, check in the original data
+                        else {
+                            let edgeData;
+                            if (document.getElementById("modal_useActualOverlaps").checked) {
+                                edgeData = edgesWithOverlaps.find(e =>
+                                    (e.source === edge.from && e.target === edge.to) ||
+                                    (e.source === edge.to && e.target === edge.from)
+                                );
+                            } else {
+                                edgeData = edges.find(e =>
+                                    (e.source === edge.from && e.target === edge.to) ||
+                                    (e.source === edge.to && e.target === edge.from)
+                                );
+                            }
+
+                            if (edgeData && edgeData[attr] !== undefined) {
                                 let val = parseFloat(edgeData[attr]);
                                 if (!isNaN(val)) values.push(val);
                             }
-                        });
-                        if (values.length > 0) {
-                            const minVal = Math.min(...values), maxVal = Math.max(...values);
-                            const minWidth = 1, maxWidth = 5;
-                            modalNetworkData.edges.get().forEach(edge => {
-                                let edgeData = edges.find(e => e.source === edge.from && e.target === edge.to);
-                                if (edgeData) {
-                                    let val = parseFloat(edgeData[attr]);
-                                    let normalized = minVal === maxVal ? (minWidth + maxWidth) / 2 : minWidth + ((val - minVal) / (maxVal - minVal)) * (maxWidth - minWidth);
-                                    modalNetworkData.edges.update({ id: edge.id, width: normalized });
-                                }
-                            });
                         }
+                    });
+
+                    // Apply scaling
+                    if (values.length > 0) {
+                        const minVal = Math.min(...values);
+                        const maxVal = Math.max(...values);
+                        const minWidth = 1, maxWidth = 10;
+
+                        modalNetworkData.edges.get().forEach(edge => {
+                            let value;
+
+                            // Try to get value from the edge object first
+                            if (edge[attr] !== undefined) {
+                                value = parseFloat(edge[attr]);
+                            }
+                            // If not found, look in original data
+                            else {
+                                let edgeData;
+                                if (document.getElementById("modal_useActualOverlaps").checked) {
+                                    edgeData = edgesWithOverlaps.find(e =>
+                                        (e.source === edge.from && e.target === edge.to) ||
+                                        (e.source === edge.to && e.target === edge.from)
+                                    );
+                                } else {
+                                    edgeData = edges.find(e =>
+                                        (e.source === edge.from && e.target === edge.to) ||
+                                        (e.source === edge.to && e.target === edge.from)
+                                    );
+                                }
+
+                                if (edgeData) {
+                                    value = parseFloat(edgeData[attr]);
+                                }
+                            }
+
+                            if (!isNaN(value)) {
+                                let normalized = minVal === maxVal
+                                    ? (minWidth + maxWidth) / 2
+                                    : minWidth + ((value - minVal) / (maxVal - minVal)) * (maxWidth - minWidth);
+
+                                modalNetworkData.edges.update({
+                                    id: edge.id,
+                                    width: normalized,
+                                    title: edge.title + `\n${attr}: ${value.toLocaleString()}`
+                                });
+                            }
+                        });
                     }
-                });
+                }
+
+                // Update the edge weight dropdown to include bp_overlap
+                const edgeWeightSelect = document.getElementById("modal_edgeWeightSelect");
+                if (!Array.from(edgeWeightSelect.options).some(opt => opt.value === "bp_overlap")) {
+                    const bpOption = document.createElement("option");
+                    bpOption.value = "bp_overlap";
+                    bpOption.textContent = "BP Overlap";
+                    edgeWeightSelect.appendChild(bpOption);
+                }
+                if (!Array.from(edgeWeightSelect.options).some(opt => opt.value === "count")) {
+                    const countOption = document.createElement("option");
+                    countOption.value = "count";
+                    countOption.textContent = "Connection Count";
+                    edgeWeightSelect.appendChild(countOption);
+                }
 
                 // Tooltip for copying node name.
                 const copyTooltip = document.getElementById("copyTooltip");
@@ -1080,6 +1300,21 @@
                         copyTooltip.textContent = "Copied!";
                         setTimeout(() => { copyTooltip.style.display = "none"; }, 1000);
                     });
+                });
+
+                // Attach event listener for the overlap mode toggle
+                document.getElementById("modal_useActualOverlaps").addEventListener("change", function () {
+                    const newData = computeModalGraphData();
+                    modalNetworkData.nodes.clear();
+                    modalNetworkData.nodes.add(newData.graphNodes);
+                    modalNetworkData.edges.clear();
+                    modalNetworkData.edges.add(newData.graphEdges);
+
+                    // Update edge weights if selected
+                    const edgeWeightAttr = document.getElementById("modal_edgeWeightSelect").value;
+                    if (edgeWeightAttr) {
+                        updateEdgeWeights(edgeWeightAttr);
+                    }
                 });
             }
 
