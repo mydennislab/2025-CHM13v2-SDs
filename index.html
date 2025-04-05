@@ -30,7 +30,6 @@
             text-align: center;
         }
 
-        /* Main container card */
         .main-container {
             max-width: 1200px;
             margin: 2rem auto;
@@ -94,17 +93,6 @@
             background: #f0f0f0;
         }
 
-        /* Graph container */
-        #graphContainer {
-            height: 500px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            margin-top: 1rem;
-            margin-bottom: 1rem;
-            display: none;
-            position: relative;
-        }
-
         footer {
             text-align: center;
             padding: 1rem;
@@ -125,6 +113,19 @@
 
         .dynamic-filter-row {
             margin-bottom: 0.5rem;
+        }
+
+        /* Tooltip for copying node name */
+        #copyTooltip {
+            position: absolute;
+            display: none;
+            background: #fff;
+            border: 1px solid #ccc;
+            padding: 5px;
+            cursor: pointer;
+            z-index: 3000;
+            font-size: 0.9rem;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.2);
         }
     </style>
 </head>
@@ -258,9 +259,26 @@
         <div class="table-responsive mb-4">
             <table id="componentsTable" class="table table-striped table-sm" style="width:100%"></table>
         </div>
-        <!-- Graph Container -->
-        <div id="graphContainer"></div>
+        <!-- (Inline graph container removed: visualization always in modal) -->
     </div>
+
+    <!-- Graph Modal (Pop-up full-screen visualization) -->
+    <div class="modal fade" id="graphFullscreenModal" tabindex="-1" aria-labelledby="graphFullscreenModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="graphFullscreenModalLabel">Graph Visualization</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" style="position: relative; padding: 10px;">
+                    <!-- The graph configuration panel and graph will be injected here -->
+                    <div id="graphFullscreenContainer" style="height: 100%;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Node Details Modal -->
     <div class="modal fade" id="nodeDetailsModal" tabindex="-1" aria-labelledby="nodeDetailsModalLabel"
         aria-hidden="true">
@@ -277,26 +295,16 @@
             </div>
         </div>
     </div>
-    <!-- Fullscreen Graph Modal -->
-    <div class="modal fade" id="graphFullscreenModal" tabindex="-1" aria-labelledby="graphFullscreenModalLabel"
-        aria-hidden="true">
-        <div class="modal-dialog modal-fullscreen">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="graphFullscreenModalLabel">Graph Fullscreen</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body" style="position: relative;">
-                    <div id="graphFullscreen" style="height: calc(100vh - 120px);"></div>
-                </div>
-            </div>
-        </div>
-    </div>
+
+    <!-- Copy Tooltip for Node Name -->
+    <div id="copyTooltip"></div>
+
     <!-- Footer -->
     <footer>
         Developed by <a href="https://github.com/mr-eyes/" target="_blank">Mohamed Abuelanin</a> in <a
             href="https://www.dennislab.org/" target="_blank">Megan Dennis lab</a>
     </footer>
+
     <!-- JS Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/datatables.net/js/dataTables.min.js"></script>
@@ -304,6 +312,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vis-network/standalone/umd/vis-network.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
     <!-- App Logic -->
     <script>
         document.addEventListener("DOMContentLoaded", () => {
@@ -311,6 +320,10 @@
             let geneList = [], selectedGenes = [];
             let nodesColumns = [], edgesColumns = [], componentsColumns = [];
             let nodesColumnTypes = {}, edgesColumnTypes = {}, componentsColumnTypes = {};
+
+            // Global modal network variables
+            let modalNetwork = null;
+            let modalNetworkData = { nodes: null, edges: null };
 
             function toBED(nodes) {
                 return nodes.map(n => {
@@ -384,8 +397,8 @@
                 if (e.key === "Enter") {
                     e.preventDefault();
                     let gene = this.value.trim();
-                    if (gene !== "") {
-                        if (!selectedGenes.includes(gene)) selectedGenes.push(gene);
+                    if (gene !== "" && !selectedGenes.includes(gene)) {
+                        selectedGenes.push(gene);
                         updateGeneTags();
                     }
                     this.value = "";
@@ -652,7 +665,8 @@
                             if (results.finalNodes.length > 1000) {
                                 alert("Visualization aborted: More than 1000 nodes to display.");
                             } else {
-                                showGraph(results.finalNodes, results.finalEdges);
+                                // Automatically show graph modal if share state contains valid nodes
+                                showGraphModal(results.finalNodes, results.finalEdges);
                             }
                         }, 500);
                     } catch (e) {
@@ -761,13 +775,13 @@
                 return { finalNodes, finalEdges, finalComponents };
             }
 
-            // Create graph in container with visualization mode toggle.
-            function createGraphInContainer(containerId, nodes, edges) {
-                const container = document.getElementById(containerId);
+            // Create or update graph in modal container.
+            function createOrUpdateModalGraph(nodes, edges) {
+                const container = document.getElementById("graphFullscreenContainer");
                 container.innerHTML = "";
                 container.style.position = "relative";
 
-                // Control overlay with visualization mode dropdown.
+                // Build control panel with numeric inputs alongside sliders.
                 const controlPanel = document.createElement("div");
                 controlPanel.style.position = "absolute";
                 controlPanel.style.top = "10px";
@@ -777,58 +791,69 @@
                 controlPanel.style.padding = "10px";
                 controlPanel.style.borderRadius = "4px";
                 controlPanel.innerHTML = `
-          <select id="${containerId}_visualizationMode" class="form-select form-select-sm mb-2">
+          <select id="modal_visualizationMode" class="form-select form-select-sm mb-2">
             <option value="regions" selected>By Regions</option>
             <option value="genes">By Genes</option>
           </select>
-          <input type="text" id="${containerId}_search" class="form-control form-control-sm mb-2" placeholder="Search nodes by gene">
-          <button type="button" id="${containerId}_searchButton" class="btn btn-primary btn-sm mb-2">Search</button>
-          <select id="${containerId}_layoutSelect" class="form-select form-select-sm mb-2">
+          <input type="text" id="modal_search" class="form-control form-control-sm mb-2" placeholder="Search nodes by gene">
+          <button type="button" id="modal_searchButton" class="btn btn-primary btn-sm mb-2">Search</button>
+          <select id="modal_layoutSelect" class="form-select form-select-sm mb-2">
             <option value="force">Force Directed</option>
             <option value="hierarchical">Hierarchical</option>
             <option value="circular">Circular</option>
           </select>
           <div class="mb-2">
-            <label for="${containerId}_nodeSize" class="form-label mb-0" style="font-size: 0.8rem;">Node Size Multiplier</label>
-            <input type="number" id="${containerId}_nodeSize" class="form-control form-control-sm" value="1" step="0.1" min="0.1">
+            <label for="modal_nodeSize" class="form-label mb-0" style="font-size: 0.8rem;">Node Size</label>
+            <div class="input-group input-group-sm">
+              <input type="range" id="modal_nodeSize" class="form-range" min="5" max="50" value="10" step="1">
+              <input type="number" id="modal_nodeSizeNumber" class="form-control" value="10" min="5" max="50" step="1" style="max-width:80px;">
+            </div>
           </div>
           <div class="mb-2">
-            <label for="${containerId}_labelSize" class="form-label mb-0" style="font-size: 0.8rem;">Label Size</label>
-            <input type="number" id="${containerId}_labelSize" class="form-control form-control-sm" value="14" step="1" min="8">
+            <label for="modal_labelSize" class="form-label mb-0" style="font-size: 0.8rem;">Label Font Size</label>
+            <div class="input-group input-group-sm">
+              <input type="range" id="modal_labelSize" class="form-range" min="10" max="30" value="14" step="1">
+              <input type="number" id="modal_labelSizeNumber" class="form-control" value="14" min="10" max="30" step="1" style="max-width:80px;">
+            </div>
           </div>
           <div class="mb-2">
-            <label for="${containerId}_edgeWeightSelect" class="form-label mb-0" style="font-size: 0.8rem;">Edge Weight Attribute</label>
-            <select id="${containerId}_edgeWeightSelect" class="form-select form-select-sm">
+            <label for="modal_edgeWeightSelect" class="form-label mb-0" style="font-size: 0.8rem;">Edge Weight Attribute</label>
+            <select id="modal_edgeWeightSelect" class="form-select form-select-sm">
               <option value="">None</option>
             </select>
           </div>
-          <button type="button" id="${containerId}_clearSelection" class="btn btn-secondary btn-sm mb-2">Clear Selection</button>
-          ${containerId === "graphContainer" ? '<button type="button" id="openFullscreen" class="btn btn-primary btn-sm mb-2">Fullscreen</button>' : '<button type="button" id="' + containerId + '_toggleFullscreen" class="btn btn-primary btn-sm mb-2">Minimize</button>'}
+          <div class="d-grid gap-2">
+            <button type="button" id="modal_clearSelection" class="btn btn-sm btn-outline-secondary">Clear Selection</button>
+          </div>
         `;
                 container.appendChild(controlPanel);
 
                 // Populate edge weight selector.
-                let edgeWeightSelect = document.getElementById(containerId + "_edgeWeightSelect");
+                const modalEdgeWeightSelect = document.getElementById("modal_edgeWeightSelect");
                 if (edgesColumns && edgesColumns.length > 0) {
-                    let options = "";
-                    edgesColumns.filter(col => !["source", "target", "node", "node_name"].includes(col.toLowerCase())).forEach(col => {
-                        options += `<option value="${col}">${col}</option>`;
-                    });
-                    edgeWeightSelect.innerHTML += options;
+                    let opts = "";
+                    edgesColumns.filter(col => !["source", "target", "node", "node_name"].includes(col.toLowerCase()))
+                        .forEach(col => { opts += `<option value="${col}">${col}</option>`; });
+                    modalEdgeWeightSelect.innerHTML += opts;
                 }
 
                 // Create graph div.
                 const graphDiv = document.createElement("div");
-                graphDiv.id = containerId + "_graph";
-                graphDiv.style.height = "100%";
+                graphDiv.id = "graphFullscreen";
+                graphDiv.style.height = "calc(100% - 220px)";
                 container.appendChild(graphDiv);
 
-                // Function to compute graph data based on visualization mode.
-                function computeGraphData() {
-                    const visMode = document.getElementById(containerId + "_visualizationMode").value;
+                // Get references for node and label size controls.
+                const nodeSizeRange = document.getElementById("modal_nodeSize");
+                const nodeSizeNumber = document.getElementById("modal_nodeSizeNumber");
+                const labelSizeRange = document.getElementById("modal_labelSize");
+                const labelSizeNumber = document.getElementById("modal_labelSizeNumber");
+
+                // Function to compute modal graph data.
+                function computeModalGraphData() {
+                    const visMode = document.getElementById("modal_visualizationMode").value;
                     let graphNodes, graphEdges;
                     if (visMode === "genes") {
-                        // For "By Genes" mode, remove region info and merge nodes.
                         let regionToGene = {};
                         nodes.forEach(n => { regionToGene[n.id] = n.gene_name ? n.gene_name : n.id; });
                         let geneGroups = {};
@@ -842,19 +867,16 @@
                             label: gene,
                             title: `Gene: ${gene} (${geneGroups[gene].length} regions)`,
                             gene: gene.toLowerCase(),
-                            size: 10,
+                            size: parseInt(nodeSizeRange.value),
                             originalColor: {}
                         }));
-                        // Build merged edges between genes.
                         let edgeMap = {};
                         edges.forEach(e => {
                             let geneA = regionToGene[e.source];
                             let geneB = regionToGene[e.target];
                             if (!geneA || !geneB || geneA === geneB) return;
                             let key = geneA < geneB ? geneA + "|" + geneB : geneB + "|" + geneA;
-                            if (!edgeMap[key]) {
-                                edgeMap[key] = { from: geneA, to: geneB, count: 0 };
-                            }
+                            if (!edgeMap[key]) { edgeMap[key] = { from: geneA, to: geneB, count: 0 }; }
                             edgeMap[key].count++;
                         });
                         graphEdges = Object.values(edgeMap).map(e => ({
@@ -864,7 +886,6 @@
                             width: 2
                         }));
                     } else {
-                        // "By Regions" mode: default.
                         graphNodes = nodes.map(n => {
                             const label = n.gene_name && n.gene_name !== "unknown" ? `${n.gene_name} (${n.id})` : n.id;
                             return {
@@ -872,7 +893,7 @@
                                 label: label,
                                 title: `Gene: ${n.gene_name}\nID: ${n.id}`,
                                 gene: n.gene_name ? n.gene_name.toLowerCase() : n.id.toLowerCase(),
-                                size: 10,
+                                size: parseInt(nodeSizeRange.value),
                                 originalColor: {}
                             };
                         });
@@ -887,129 +908,130 @@
                     return { graphNodes, graphEdges };
                 }
 
-                // Compute initial graph data.
-                let { graphNodes, graphEdges } = computeGraphData();
-
-                const data = {
-                    nodes: new vis.DataSet(graphNodes),
-                    edges: new vis.DataSet(graphEdges)
-                };
-
+                let { graphNodes, graphEdges } = computeModalGraphData();
+                modalNetworkData.nodes = new vis.DataSet(graphNodes);
+                modalNetworkData.edges = new vis.DataSet(graphEdges);
                 let options = {
+                    layout: { improvedLayout: false },
                     physics: {
                         stabilization: true,
-                        barnesHut: {
-                            gravitationalConstant: -20000,
-                            springLength: 250
-                        }
+                        barnesHut: { gravitationalConstant: -20000, springLength: 250 }
                     },
-                    interaction: {
-                        tooltipDelay: 200,
-                        hover: true
-                    },
+                    interaction: { tooltipDelay: 200, hover: true },
                     nodes: {
                         shape: 'dot',
-                        size: 10,
-                        font: { size: 14, color: '#343a40' }
+                        size: parseInt(nodeSizeRange.value),
+                        font: { size: parseInt(labelSizeRange.value), color: '#343a40' }
                     },
                     edges: { width: 2 }
                 };
-
-                let network = new vis.Network(graphDiv, data, options);
+                modalNetwork = new vis.Network(graphDiv, {
+                    nodes: modalNetworkData.nodes,
+                    edges: modalNetworkData.edges
+                }, options);
 
                 // Save original colors.
-                data.nodes.get().forEach(node => {
-                    data.nodes.update({ id: node.id, originalColor: node.color || {} });
+                modalNetworkData.nodes.get().forEach(node => {
+                    modalNetworkData.nodes.update({ id: node.id, originalColor: node.color || {} });
                 });
 
-                // When visualization mode changes, update the graph immediately.
-                document.getElementById(containerId + "_visualizationMode").addEventListener("change", function () {
-                    const { graphNodes: newNodes, graphEdges: newEdges } = computeGraphData();
-                    data.nodes.clear();
-                    data.nodes.add(newNodes);
-                    data.edges.clear();
-                    data.edges.add(newEdges);
+                // Attach event listeners for control panel.
+                document.getElementById("modal_visualizationMode").addEventListener("change", function () {
+                    const newData = computeModalGraphData();
+                    modalNetworkData.nodes.clear();
+                    modalNetworkData.nodes.add(newData.graphNodes);
+                    modalNetworkData.edges.clear();
+                    modalNetworkData.edges.add(newData.graphEdges);
                 });
 
-                // Search functionality triggered by button.
-                document.getElementById(containerId + "_searchButton").addEventListener("click", function () {
-                    const searchTerm = document.getElementById(containerId + "_search").value.trim().toLowerCase();
-                    data.nodes.get().forEach(function (node) {
-                        let orig = node.originalColor || {};
-                        if (searchTerm !== "" &&
-                            (node.gene.includes(searchTerm) || searchTerm.includes(node.gene)) &&
-                            (node.gene.length >= searchTerm.length || node.gene.length === searchTerm.length - 1)) {
-                            data.nodes.update({ id: node.id, color: { background: 'yellow' } });
-                        } else {
-                            data.nodes.update({ id: node.id, color: orig });
-                        }
-                    });
-                });
-
-                // Clear selection resets colors.
-                document.getElementById(containerId + "_clearSelection").addEventListener("click", function () {
-                    document.getElementById(containerId + "_search").value = "";
-                    data.nodes.get().forEach(function (node) {
-                        data.nodes.update({ id: node.id, color: node.originalColor || {} });
-                    });
-                    network.unselectAll();
-                });
-
-                // Layout control.
-                document.getElementById(containerId + "_layoutSelect").addEventListener("change", function () {
-                    const layoutType = this.value;
-                    if (layoutType === "hierarchical") {
-                        network.setOptions({ layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed' } } });
-                    } else if (layoutType === "circular") {
-                        network.setOptions({ physics: false });
-                        const containerRect = graphDiv.getBoundingClientRect();
-                        const centerX = containerRect.width / 2;
-                        const centerY = containerRect.height / 2;
-                        const radius = Math.min(containerRect.width, containerRect.height) / 3;
-                        const nodesArray = data.nodes.get();
-                        nodesArray.forEach((node, index) => {
-                            const angle = 2 * Math.PI * index / nodesArray.length;
-                            const x = centerX + radius * Math.cos(angle);
-                            const y = centerY + radius * Math.sin(angle);
-                            data.nodes.update({ id: node.id, x: x, y: y, fixed: { x: true, y: true } });
+                // Sync node size controls.
+                nodeSizeRange.addEventListener("input", () => {
+                    nodeSizeNumber.value = nodeSizeRange.value;
+                    if (modalNetworkData.nodes) {
+                        modalNetworkData.nodes.get().forEach(node => {
+                            modalNetworkData.nodes.update({ id: node.id, size: parseInt(nodeSizeRange.value) });
                         });
-                    } else {
-                        network.setOptions({ layout: { hierarchical: false } });
-                        network.setOptions({ physics: { stabilization: true } });
-                        data.nodes.get().forEach(node => {
-                            data.nodes.update({ id: node.id, fixed: false });
+                        modalNetwork.redraw();
+                    }
+                });
+                nodeSizeNumber.addEventListener("change", () => {
+                    nodeSizeRange.value = nodeSizeNumber.value;
+                    if (modalNetworkData.nodes) {
+                        modalNetworkData.nodes.get().forEach(node => {
+                            modalNetworkData.nodes.update({ id: node.id, size: parseInt(nodeSizeRange.value) });
+                        });
+                        modalNetwork.redraw();
+                    }
+                });
+
+                // Sync label size controls.
+                labelSizeRange.addEventListener("input", () => {
+                    labelSizeNumber.value = labelSizeRange.value;
+                    modalNetwork.setOptions({ nodes: { font: { size: parseInt(labelSizeRange.value) } } });
+                });
+                labelSizeNumber.addEventListener("change", () => {
+                    labelSizeRange.value = labelSizeNumber.value;
+                    modalNetwork.setOptions({ nodes: { font: { size: parseInt(labelSizeRange.value) } } });
+                });
+
+                document.getElementById("modal_searchButton").addEventListener("click", function () {
+                    const searchTerm = document.getElementById("modal_search").value.trim().toLowerCase();
+                    if (modalNetworkData.nodes) {
+                        modalNetworkData.nodes.get().forEach(function (node) {
+                            let orig = node.originalColor || {};
+                            if (searchTerm !== "" &&
+                                (node.gene.includes(searchTerm) || searchTerm.includes(node.gene)) &&
+                                (node.gene.length >= searchTerm.length || node.gene.length === searchTerm.length - 1)) {
+                                modalNetworkData.nodes.update({ id: node.id, color: { background: 'yellow' } });
+                            } else {
+                                modalNetworkData.nodes.update({ id: node.id, color: orig });
+                            }
                         });
                     }
                 });
 
-                // Node size control.
-                document.getElementById(containerId + "_nodeSize").addEventListener("change", function () {
-                    const multiplier = parseFloat(this.value) || 1;
-                    data.nodes.get().forEach(node => {
-                        data.nodes.update({ id: node.id, size: 10 * multiplier });
-                    });
+                // Clear selection resets search and all node colors.
+                document.getElementById("modal_clearSelection").addEventListener("click", function () {
+                    document.getElementById("modal_search").value = "";
+                    if (modalNetworkData.nodes) {
+                        modalNetworkData.nodes.get().forEach(function (node) {
+                            modalNetworkData.nodes.update({ id: node.id, color: node.originalColor || {} });
+                        });
+                        modalNetwork.redraw();
+                    }
+                    modalNetwork.unselectAll();
                 });
 
-                // Add label size control
-                document.getElementById(containerId + "_labelSize").addEventListener("change", function () {
-                    const fontSize = parseInt(this.value) || 14;
-                    network.setOptions({
-                        nodes: {
-                            font: { size: fontSize }
-                        }
-                    });
+                document.getElementById("modal_layoutSelect").addEventListener("change", function () {
+                    const layoutType = this.value;
+                    if (layoutType === "hierarchical") {
+                        modalNetwork.setOptions({ layout: { hierarchical: { enabled: true, direction: 'UD', sortMethod: 'directed' } } });
+                    } else if (layoutType === "circular") {
+                        modalNetwork.setOptions({ physics: false });
+                        const rect = graphDiv.getBoundingClientRect();
+                        const centerX = rect.width / 2, centerY = rect.height / 2, radius = Math.min(rect.width, rect.height) / 3;
+                        modalNetworkData.nodes.get().forEach((node, index) => {
+                            const angle = 2 * Math.PI * index / modalNetworkData.nodes.get().length;
+                            modalNetworkData.nodes.update({ id: node.id, x: centerX + radius * Math.cos(angle), y: centerY + radius * Math.sin(angle), fixed: { x: true, y: true } });
+                        });
+                    } else {
+                        modalNetwork.setOptions({ layout: { hierarchical: false } });
+                        modalNetwork.setOptions({ physics: { stabilization: true } });
+                        modalNetworkData.nodes.get().forEach(node => {
+                            modalNetworkData.nodes.update({ id: node.id, fixed: false });
+                        });
+                    }
                 });
 
-                // Edge weight control.
-                document.getElementById(containerId + "_edgeWeightSelect").addEventListener("change", function () {
+                document.getElementById("modal_edgeWeightSelect").addEventListener("change", function () {
                     const attr = this.value;
                     if (attr === "") {
-                        data.edges.get().forEach(edge => {
-                            data.edges.update({ id: edge.id, width: 2 });
+                        modalNetworkData.edges.get().forEach(edge => {
+                            modalNetworkData.edges.update({ id: edge.id, width: 2 });
                         });
                     } else {
                         let values = [];
-                        data.edges.get().forEach(edge => {
+                        modalNetworkData.edges.get().forEach(edge => {
                             let edgeData = edges.find(e => e.source === edge.from && e.target === edge.to);
                             if (edgeData) {
                                 let val = parseFloat(edgeData[attr]);
@@ -1017,63 +1039,128 @@
                             }
                         });
                         if (values.length > 0) {
-                            const minVal = Math.min(...values);
-                            const maxVal = Math.max(...values);
+                            const minVal = Math.min(...values), maxVal = Math.max(...values);
                             const minWidth = 1, maxWidth = 5;
-                            data.edges.get().forEach(edge => {
+                            modalNetworkData.edges.get().forEach(edge => {
                                 let edgeData = edges.find(e => e.source === edge.from && e.target === edge.to);
                                 if (edgeData) {
                                     let val = parseFloat(edgeData[attr]);
                                     let normalized = minVal === maxVal ? (minWidth + maxWidth) / 2 : minWidth + ((val - minVal) / (maxVal - minVal)) * (maxWidth - minWidth);
-                                    data.edges.update({ id: edge.id, width: normalized });
+                                    modalNetworkData.edges.update({ id: edge.id, width: normalized });
                                 }
                             });
                         }
                     }
                 });
 
-                // Fullscreen / Minimize.
-                if (containerId === "graphContainer") {
-                    document.getElementById("openFullscreen").addEventListener("click", function () {
-                        const modal = new bootstrap.Modal(document.getElementById('graphFullscreenModal'));
-                        modal.show();
-                        setTimeout(() => {
-                            createGraphInContainer("graphFullscreen", nodes, edges);
-                        }, 300);
-                    });
-                } else {
-                    document.getElementById(containerId + "_toggleFullscreen").addEventListener("click", function () {
-                        const modalEl = document.getElementById('graphFullscreenModal');
-                        const modal = bootstrap.Modal.getInstance(modalEl);
-                        modal.hide();
-                    });
-                }
-
-                network.on("click", function (params) {
-                    if (params.nodes.length > 0) {
-                        let nodeId = params.nodes[0];
-                        let nodeData = nodes.find(n => n.id === nodeId) || graphNodes.find(n => n.id === nodeId);
-                        if (nodeData) {
-                            document.getElementById("nodeDetailsContent").innerHTML = `<pre>${JSON.stringify(nodeData, null, 2)}</pre>`;
-                            var modal = new bootstrap.Modal(document.getElementById('nodeDetailsModal'));
-                            modal.show();
-                        }
+                // Tooltip for copying node name.
+                const copyTooltip = document.getElementById("copyTooltip");
+                graphDiv.addEventListener("mousemove", function (e) {
+                    if (copyTooltip.style.display === "block") {
+                        copyTooltip.style.left = (e.pageX + 10) + "px";
+                        copyTooltip.style.top = (e.pageY + 10) + "px";
                     }
                 });
-                return network;
+                modalNetwork.on("hoverNode", function (params) {
+                    const nodeId = params.node;
+                    const node = modalNetworkData.nodes.get(nodeId);
+                    if (node) {
+                        copyTooltip.textContent = "Copy: " + node.label;
+                        copyTooltip.style.display = "block";
+                        copyTooltip.style.left = (params.event.pageX + 10) + "px";
+                        copyTooltip.style.top = (params.event.pageY + 10) + "px";
+                    }
+                });
+                modalNetwork.on("blurNode", function () {
+                    copyTooltip.style.display = "none";
+                });
+                copyTooltip.addEventListener("click", function () {
+                    const text = copyTooltip.textContent.replace("Copy: ", "");
+                    navigator.clipboard.writeText(text).then(() => {
+                        copyTooltip.textContent = "Copied!";
+                        setTimeout(() => { copyTooltip.style.display = "none"; }, 1000);
+                    });
+                });
             }
 
-            function showGraph(nodes, edges) {
+            // Show graph modal.
+            function showGraphModal(nodes, edges) {
                 if (nodes.length > 1000) {
                     alert("Visualization aborted: More than 1000 nodes to display.");
                     return;
                 }
-                const container = document.getElementById("graphContainer");
-                container.style.display = "block";
-                createGraphInContainer("graphContainer", nodes, edges);
+                if (modalNetwork) {
+                    // Update modal network data.
+                    const newData = (function computeModalData() {
+                        const visMode = document.getElementById("modal_visualizationMode").value;
+                        let graphNodes, graphEdges;
+                        if (visMode === "genes") {
+                            let regionToGene = {};
+                            nodes.forEach(n => { regionToGene[n.id] = n.gene_name ? n.gene_name : n.id; });
+                            let geneGroups = {};
+                            nodes.forEach(n => {
+                                let gene = n.gene_name ? n.gene_name : n.id;
+                                if (!geneGroups[gene]) geneGroups[gene] = [];
+                                geneGroups[gene].push(n);
+                            });
+                            graphNodes = Object.keys(geneGroups).map(gene => ({
+                                id: gene,
+                                label: gene,
+                                title: `Gene: ${gene} (${geneGroups[gene].length} regions)`,
+                                gene: gene.toLowerCase(),
+                                size: parseInt(document.getElementById("modal_nodeSize").value),
+                                originalColor: {}
+                            }));
+                            let edgeMap = {};
+                            edges.forEach(e => {
+                                let geneA = regionToGene[e.source];
+                                let geneB = regionToGene[e.target];
+                                if (!geneA || !geneB || geneA === geneB) return;
+                                let key = geneA < geneB ? geneA + "|" + geneB : geneB + "|" + geneA;
+                                if (!edgeMap[key]) { edgeMap[key] = { from: geneA, to: geneB, count: 0 }; }
+                                edgeMap[key].count++;
+                            });
+                            graphEdges = Object.values(edgeMap).map(e => ({
+                                from: e.from,
+                                to: e.to,
+                                title: `Edge between ${e.from} and ${e.to} (${e.count} connections)`,
+                                width: 2
+                            }));
+                        } else {
+                            graphNodes = nodes.map(n => {
+                                const label = n.gene_name && n.gene_name !== "unknown" ? `${n.gene_name} (${n.id})` : n.id;
+                                return {
+                                    id: n.id,
+                                    label: label,
+                                    title: `Gene: ${n.gene_name}\nID: ${n.id}`,
+                                    gene: n.gene_name ? n.gene_name.toLowerCase() : n.id.toLowerCase(),
+                                    size: parseInt(document.getElementById("modal_nodeSize").value),
+                                    originalColor: {}
+                                };
+                            });
+                            graphEdges = edges.map((e, i) => ({
+                                id: i,
+                                from: e.source,
+                                to: e.target,
+                                title: Object.entries(e).map(([k, v]) => `${k}: ${v}`).join("\n"),
+                                width: 2
+                            }));
+                        }
+                        return { graphNodes, graphEdges };
+                    })();
+                    modalNetworkData.nodes.clear();
+                    modalNetworkData.nodes.add(newData.graphNodes);
+                    modalNetworkData.edges.clear();
+                    modalNetworkData.edges.add(newData.graphEdges);
+                } else {
+                    createOrUpdateModalGraph(nodes, edges);
+                }
+                const modalEl = document.getElementById("graphFullscreenModal");
+                const modal = new bootstrap.Modal(modalEl);
+                modal.show();
             }
 
-            // (Download and share functions remain unchanged below this point...)
+            // Download and share functions remain unchanged.
             function downloadZip(finalNodes, finalEdges) {
                 const zip = new JSZip();
                 zip.file("filtered_nodes.tsv", toTSV(finalNodes));
@@ -1198,11 +1285,10 @@
             document.getElementById("shareResults").onclick = shareResults;
             document.getElementById("applyFilters").onclick = () => {
                 applyFiltersAll();
-                document.getElementById("graphContainer").style.display = "none";
             };
             document.getElementById("visualizeGraph").onclick = () => {
                 const { finalNodes, finalEdges } = applyFiltersAll();
-                showGraph(finalNodes, finalEdges);
+                showGraphModal(finalNodes, finalEdges);
             };
 
             document.getElementById("addNodeFilter").addEventListener("click", () => {
